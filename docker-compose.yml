@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pharmacy-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pharmacy_db
+      POSTGRES_USER: pharmacy
+      POSTGRES_PASSWORD: pharmacy123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pharmacy_data:/var/lib/postgresql/data
+
+volumes:
+  pharmacy_data:
