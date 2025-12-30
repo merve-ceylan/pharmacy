@@ -85,8 +85,8 @@ Pharmacy Platform is a B2B SaaS solution that allows pharmacies to launch their 
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/merve-ceylan/pharmacy-platform.git
-cd pharmacy-platform
+git clone https://github.com/merve-ceylan/pharmacy
+cd pharmacy
 ```
 
 2. **Start PostgreSQL with Docker**
