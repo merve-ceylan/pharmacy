@@ -61,10 +61,22 @@ public class OrderService {
         order.setShippingPhone(shippingPhone);
         order.setNotes(notes);
 
+        // Calculate subtotal first
         BigDecimal subtotal = BigDecimal.ZERO;
+        for (CartItem cartItem : cart.getItems()) {
+            BigDecimal itemTotal = cartItem.getProduct().getEffectivePrice()
+                    .multiply(new BigDecimal(cartItem.getQuantity()));
+            subtotal = subtotal.add(itemTotal);
+        }
+
+        // Set amounts before saving
+        order.setSubtotal(subtotal);
+        order.setShippingCost(calculateShippingCost(deliveryType));
+        order.setTotalAmount(subtotal.add(order.getShippingCost()));
 
         order = orderRepository.save(order);
 
+        // Create order items and update stock
         for (CartItem cartItem : cart.getItems()) {
             Product product = cartItem.getProduct();
 
@@ -85,10 +97,6 @@ public class OrderService {
             product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
             productRepository.save(product);
         }
-
-        order.setSubtotal(subtotal);
-        order.setShippingCost(calculateShippingCost(deliveryType));
-        order.setTotalAmount(subtotal.add(order.getShippingCost()));
 
         order = orderRepository.save(order);
 
