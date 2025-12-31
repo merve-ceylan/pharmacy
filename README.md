@@ -1,183 +1,271 @@
 # 💊 Pharmacy E-Commerce Platform
 
-A multi-tenant SaaS platform that enables pharmacies to create and manage their own e-commerce stores. Built with Spring Boot 3.2, PostgreSQL, and JWT authentication.
+Multi-tenant SaaS e-commerce platform for pharmacies in Turkey.
 
-## 📋 Table of Contents
+![Java](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.0-green)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
-- [Overview](#overview)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [API Documentation](#api-documentation)
-- [Project Structure](#project-structure)
-- [Security](#security)
-- [Roadmap](#roadmap)
-- [License](#license)
+## 🎯 Features
 
-## 🎯 Overview
+- **Multi-tenant Architecture**: Each pharmacy gets their own subdomain
+- **Role-based Access**: Super Admin, Pharmacy Owner, Staff, Customer
+- **Product Management**: Categories, stock tracking, discounts
+- **Shopping Cart**: Real-time stock validation
+- **Order Management**: Full lifecycle with status tracking
+- **JWT Authentication**: Secure token-based auth with refresh tokens
+- **Audit Logging**: Complete action history
 
-Pharmacy Platform is a B2B SaaS solution that allows pharmacies to launch their own branded e-commerce websites. Each pharmacy gets a dedicated subdomain (e.g., `ozaneczanesi.pharmacyplatform.com`) or can connect their custom domain.
+## 🏗️ Architecture
 
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      CLIENTS                                 │
+│  (demo.eczanem.com)  (ozan.eczanem.com)  (admin.eczanem.com)│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    SPRING BOOT API                           │
+├─────────────────────────────────────────────────────────────┤
+│  Controllers │ Services │ Repositories │ Security           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     POSTGRESQL                               │
+│  pharmacies│users│products│orders│carts│payments│audit_logs │
+└─────────────────────────────────────────────────────────────┘
+```
 
-
-## ✨ Features
-
-### Multi-Tenant Architecture
-- Shared database with pharmacy-level data isolation
-- Subdomain and custom domain support
-- Pharmacy-specific branding (logo, colors)
-
-### User Management
-- Role-based access control (Super Admin, Pharmacy Owner, Staff, Customer)
-- JWT authentication with refresh tokens
-- Account lockout after failed login attempts
-- Strong password validation
-
-### Product Management
-- Category hierarchy support
-- SKU and barcode tracking
-- Stock management with low-stock alerts
-- Bulk product import via Excel
-
-### Order Management
-- Complete order lifecycle (Pending → Confirmed → Preparing → Shipped → Delivered)
-- Multiple delivery options (Courier, Cargo)
-- Order cancellation with stock restoration
-- Manual tracking number entry
-
-### Payment Integration
-- iyzico payment gateway integration
-- Full and partial refund support
-- Payment status tracking
-
-### Security
-- JWT-based authentication
-- Rate limiting (brute force protection)
-- Token blacklisting for logout
-- Request logging and audit trails
-- Input sanitization (XSS protection)
-
-
-## 🛠️ Tech Stack
-
-| Category | Technology |
-|----------|------------|
-| Language | Java 21 |
-| Framework | Spring Boot 3.2.0 |
-| Security | Spring Security 6, JWT (jjwt 0.12.3) |
-| Database | PostgreSQL 16 |
-| ORM | Spring Data JPA, Hibernate 6 |
-| Build Tool | Maven |
-| Containerization | Docker, Docker Compose |
-| API Docs | SpringDoc OpenAPI |
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-
-- Java 21 or higher
+- Java 21
 - Maven 3.8+
-- Docker and Docker Compose
+- Docker & Docker Compose
 - PostgreSQL 16 (or use Docker)
 
-### Installation
-
-1. **Clone the repository**
+### 1. Clone & Setup
 ```bash
-git clone https://github.com/merve-ceylan/pharmacy-platform.git
+git clone https://github.com/yourusername/pharmacy-platform.git
 cd pharmacy-platform
 ```
 
-2. **Start PostgreSQL with Docker**
+### 2. Start Database
 ```bash
 docker-compose up -d
 ```
 
-3. **Configure application properties**
+### 3. Run Application
 ```bash
-cp src/main/resources/application.yml.example src/main/resources/application.yml
+./mvnw spring-boot:run
 ```
 
-4. **Build the project**
-```bash
-mvn clean install
-```
-
-5. **Run the application**
-```bash
-mvn spring-boot:run
-```
+### 4. Test Accounts
+| Role | Email | Password |
+|------|-------|----------|
+| Super Admin | admin@pharmacy.com | Admin123!@# |
+| Pharmacy Owner | owner@demo.com | Owner123!@# |
+| Staff | staff@demo.com | Staff123!@# |
+| Customer | test@test.com | Pharmacy2024!@# |
 
 ## 📚 API Documentation
 
-### Authentication Endpoints
-
+### Authentication
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| POST | `/api/auth/login` | User login | Public |
 | POST | `/api/auth/register` | Customer registration | Public |
-| POST | `/api/auth/register/pharmacy-owner` | Register pharmacy owner | Super Admin |
-| POST | `/api/auth/register/staff` | Register staff member | Pharmacy Owner |
-| POST | `/api/auth/logout` | Logout (invalidate token) | Authenticated |
-| POST | `/api/auth/refresh` | Refresh access token | Public |
-| GET | `/api/auth/me` | Get current user info | Authenticated |
-| POST | `/api/auth/change-password` | Change password | Authenticated |
-| POST | `/api/auth/forgot-password` | Request password reset | Public |
+| POST | `/api/auth/login` | Login | Public |
+| POST | `/api/auth/logout` | Logout | Authenticated |
+| POST | `/api/auth/refresh` | Refresh token | Public |
+| GET | `/api/auth/me` | Current user info | Authenticated |
 
-### Request/Response Examples
+### Products
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/public/pharmacies/{id}/products` | List products | Public |
+| GET | `/api/public/pharmacies/{id}/products/featured` | Featured products | Public |
+| GET | `/api/public/pharmacies/{id}/products/search?q=` | Search products | Public |
+| GET | `/api/staff/products` | All products (admin) | Staff |
+| POST | `/api/staff/products` | Create product | Staff |
+| PUT | `/api/staff/products/{id}` | Update product | Staff |
+| PATCH | `/api/staff/products/{id}/stock` | Update stock | Staff |
 
-**Login Request**
-```json
-POST /api/auth/login
-{
-  "email": "user@example.com",
-  "password": "SecurePass123!"
-}
+### Categories
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/public/categories` | List categories | Public |
+| POST | `/api/admin/categories` | Create category | Super Admin |
+| PUT | `/api/admin/categories/{id}` | Update category | Super Admin |
+
+### Cart
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/customer/cart/{pharmacyId}` | Get cart | Customer |
+| POST | `/api/customer/cart/{pharmacyId}/items` | Add item | Customer |
+| PUT | `/api/customer/cart/{pharmacyId}/items/{id}` | Update quantity | Customer |
+| DELETE | `/api/customer/cart/{pharmacyId}/items/{id}` | Remove item | Customer |
+
+### Orders
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| POST | `/api/customer/orders` | Create order | Customer |
+| GET | `/api/customer/orders` | My orders | Customer |
+| GET | `/api/customer/orders/{orderNumber}` | Order details | Customer |
+| GET | `/api/staff/orders` | Pharmacy orders | Staff |
+| PATCH | `/api/staff/orders/{orderNumber}/status` | Update status | Staff |
+
+### Pharmacy Management
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/admin/pharmacies` | List all | Super Admin |
+| POST | `/api/admin/pharmacies` | Create pharmacy | Super Admin |
+| GET | `/api/pharmacy/info` | My pharmacy | Owner |
+| PUT | `/api/pharmacy/info` | Update pharmacy | Owner |
+
+## 📁 Project Structure
+
+```
+src/main/java/com/pharmacy/
+├── config/
+│   └── DataSeeder.java
+├── controller/
+│   ├── AuthController.java
+│   ├── ProductController.java
+│   ├── CategoryController.java
+│   ├── OrderController.java
+│   ├── CartController.java
+│   ├── PharmacyController.java
+│   └── PaymentController.java
+├── dto/
+│   ├── request/
+│   │   ├── LoginRequest.java
+│   │   ├── RegisterRequest.java
+│   │   ├── ProductCreateRequest.java
+│   │   ├── OrderCreateRequest.java
+│   │   └── ...
+│   └── response/
+│       ├── AuthResponse.java
+│       ├── ProductResponse.java
+│       ├── OrderResponse.java
+│       ├── ApiResponse.java
+│       ├── PageResponse.java
+│       └── ...
+├── entity/
+│   ├── BaseEntity.java
+│   ├── User.java
+│   ├── Pharmacy.java
+│   ├── Product.java
+│   ├── Category.java
+│   ├── Order.java
+│   ├── OrderItem.java
+│   ├── Cart.java
+│   ├── CartItem.java
+│   ├── Payment.java
+│   └── AuditLog.java
+├── enums/
+│   ├── UserRole.java
+│   ├── OrderStatus.java
+│   ├── PaymentStatus.java
+│   └── ...
+├── exception/
+│   ├── GlobalExceptionHandler.java
+│   ├── ResourceNotFoundException.java
+│   ├── BusinessException.java
+│   └── ...
+├── mapper/
+│   ├── ProductMapper.java
+│   ├── OrderMapper.java
+│   ├── CartMapper.java
+│   └── ...
+├── repository/
+│   ├── UserRepository.java
+│   ├── ProductRepository.java
+│   ├── OrderRepository.java
+│   └── ...
+├── security/
+│   ├── SecurityConfig.java
+│   ├── JwtService.java
+│   ├── JwtAuthenticationFilter.java
+│   └── ...
+└── service/
+    ├── AuthService.java
+    ├── ProductService.java
+    ├── OrderService.java
+    ├── CartService.java
+    └── ...
 ```
 
-**Login Response**
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
-  "tokenType": "Bearer",
-  "expiresIn": 86400,
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "role": "CUSTOMER"
-  }
-}
+## 🔒 Security Features
+
+- JWT authentication with refresh tokens
+- Password strength validation
+- Account lockout after failed attempts
+- Rate limiting (100 req/min general, 5 req/min login)
+- Token blacklisting on logout
+- Role-based access control
+
+## 🧪 API Testing
+
+### Login
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"owner@demo.com","password":"Owner123!@#"}'
 ```
 
-## 🔒 Security
+### Get Products
+```bash
+curl http://localhost:8080/api/staff/products \
+  -H "Authorization: Bearer <token>"
+```
 
-### Security Features
+### Create Order
+```bash
+curl -X POST http://localhost:8080/api/customer/orders \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pharmacyId": 1,
+    "deliveryType": "CARGO",
+    "shippingAddress": "Test Address",
+    "shippingCity": "İstanbul",
+    "shippingDistrict": "Kadıköy",
+    "shippingPostalCode": "34700",
+    "shippingPhone": "05551234567"
+  }'
+```
 
-- **Password Requirements**: Minimum 8 characters, uppercase, lowercase, digit, special character
-- **Account Lockout**: 5 failed attempts = 30 minute lockout
-- **Rate Limiting**: 100 requests/minute general, 5 requests/minute for login
-- **Token Blacklisting**: Tokens are invalidated on logout
-- **Audit Logging**: All security events are logged
+## 📋 Order Status Flow
 
-## 🗺️ Roadmap
+```
+PENDING → CONFIRMED → PREPARING → SHIPPED → DELIVERED
+    ↓         ↓
+ CANCELLED  CANCELLED
+```
 
-- [ ] Product management controllers
-- [ ] Order management controllers
-- [ ] Shopping cart controllers
-- [ ] Excel bulk import
+## 🛣️ Roadmap
+
+- [x] Project setup & configuration
+- [x] Entity & repository layer
+- [x] Service layer with business logic
+- [x] Security & JWT authentication
+- [x] Exception handling
+- [x] Controller & DTO layer
+- [x] API testing
+- [ ] Multi-tenant domain resolver
 - [ ] iyzico payment integration
 - [ ] Email notifications
+- [ ] Frontend (React/Next.js)
 - [ ] Admin dashboard
-- [ ] Customer mobile app
+- [ ] Excel product import
 
 ## 📄 License
 
-This project is proprietary software. All rights reserved.
+MIT License - see [LICENSE](LICENSE) for details.
 
----
+## 👨‍💻 Author
 
-**Built with ❤️ for pharmacies in Turkey*
+Built with ❤️ for Turkish pharmacies
