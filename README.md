@@ -180,4 +180,4 @@ This project is proprietary software. All rights reserved.
 
 ---
 
-**Built with ❤️ for pharmacies in Turkey**
+**Built with ❤️ for pharmacies in Turkey*
