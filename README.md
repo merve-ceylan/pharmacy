@@ -268,4 +268,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 👨‍💻 Author
 
-Built with ❤️ for Turkish pharmacies
+Built with ❤️ for Turkish pharmacies*
