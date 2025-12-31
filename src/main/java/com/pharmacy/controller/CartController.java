@@ -18,6 +18,11 @@ import com.pharmacy.service.CartService;
 import com.pharmacy.service.PharmacyService;
 import com.pharmacy.service.ProductService;
 import com.pharmacy.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +35,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/customer/cart")
 @PreAuthorize("hasRole('CUSTOMER')")
+@Tag(name = "Cart", description = "Shopping cart operations")
+@SecurityRequirement(name = "Bearer Authentication")
 public class CartController {
 
     private static final Logger log = LoggerFactory.getLogger(CartController.class);
@@ -58,20 +65,19 @@ public class CartController {
         this.auditLogService = auditLogService;
     }
 
-    /**
-     * Get cart for a pharmacy
-     * GET /api/customer/cart/{pharmacyId}
-     */
     @GetMapping("/{pharmacyId}")
-    public ResponseEntity<CartResponse> getCart(@PathVariable Long pharmacyId) {
+    @Operation(
+            summary = "Get cart",
+            description = "Get shopping cart for a specific pharmacy"
+    )
+    public ResponseEntity<CartResponse> getCart(
+            @Parameter(description = "Pharmacy ID") @PathVariable Long pharmacyId) {
         Long customerId = getCurrentCustomerId();
 
-        // Validate pharmacy exists and is active
         pharmacyService.validatePharmacyActive(pharmacyId);
 
         Cart cart = cartService.getCart(customerId, pharmacyId)
                 .orElseGet(() -> {
-                    // Return empty cart response if no cart exists
                     User customer = userService.getById(customerId);
                     Pharmacy pharmacy = pharmacyService.getById(pharmacyId);
                     return cartService.getOrCreateCart(customer, pharmacy);
@@ -80,11 +86,15 @@ public class CartController {
         return ResponseEntity.ok(cartMapper.toResponse(cart));
     }
 
-    /**
-     * Add item to cart
-     * POST /api/customer/cart/{pharmacyId}/items
-     */
     @PostMapping("/{pharmacyId}/items")
+    @Operation(
+            summary = "Add item to cart",
+            description = "Add a product to the shopping cart"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Item added"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Product not found or insufficient stock")
+    })
     public ResponseEntity<ApiResponse<CartResponse>> addToCart(
             @PathVariable Long pharmacyId,
             @Valid @RequestBody CartItemAddRequest request) {
@@ -92,27 +102,21 @@ public class CartController {
         Long customerId = getCurrentCustomerId();
         String customerEmail = securityUtils.getCurrentUserEmail().orElse("unknown");
 
-        // Validate pharmacy
         pharmacyService.validatePharmacyActive(pharmacyId);
 
-        // Validate product
         Product product = productService.getById(request.getProductId());
         if (!product.getPharmacy().getId().equals(pharmacyId)) {
             throw new BadRequestException("Product does not belong to this pharmacy");
         }
 
-        // Get or create cart
         User customer = userService.getById(customerId);
         Pharmacy pharmacy = pharmacyService.getById(pharmacyId);
         Cart cart = cartService.getOrCreateCart(customer, pharmacy);
 
-        // Add item
         CartItem item = cartService.addToCart(cart, product, request.getQuantity());
 
-        // Refresh cart
         cart = cartService.getById(cart.getId());
 
-        // Audit log
         auditLogService.logCartItemAdded(
                 pharmacyId, customerId, customerEmail,
                 cart.getId(), product.getId(), product.getName(), request.getQuantity()
@@ -124,27 +128,24 @@ public class CartController {
         return ResponseEntity.ok(ApiResponse.success("Item added to cart", cartMapper.toResponse(cart)));
     }
 
-    /**
-     * Update cart item quantity
-     * PUT /api/customer/cart/{pharmacyId}/items/{itemId}
-     */
     @PutMapping("/{pharmacyId}/items/{itemId}")
+    @Operation(
+            summary = "Update cart item",
+            description = "Update quantity of an item in cart (set to 0 to remove)"
+    )
     public ResponseEntity<ApiResponse<CartResponse>> updateCartItem(
             @PathVariable Long pharmacyId,
-            @PathVariable Long itemId,
+            @Parameter(description = "Cart item ID") @PathVariable Long itemId,
             @Valid @RequestBody CartItemUpdateRequest request) {
 
         Long customerId = getCurrentCustomerId();
         String customerEmail = securityUtils.getCurrentUserEmail().orElse("unknown");
 
-        // Validate pharmacy
         pharmacyService.validatePharmacyActive(pharmacyId);
 
-        // Get cart and validate ownership
         Cart cart = cartService.getCart(customerId, pharmacyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart", "pharmacyId", pharmacyId.toString()));
 
-        // Validate item belongs to cart
         CartItem item = cart.getItems().stream()
                 .filter(i -> i.getId().equals(itemId))
                 .findFirst()
@@ -153,7 +154,6 @@ public class CartController {
         String productName = item.getProduct().getName();
         Integer oldQuantity = item.getQuantity();
 
-        // Update quantity (0 means remove)
         if (request.getQuantity() == 0) {
             cartService.removeFromCart(itemId);
             auditLogService.logCartItemRemoved(pharmacyId, customerId, customerEmail,
@@ -164,7 +164,6 @@ public class CartController {
                     cart.getId(), item.getProduct().getId(), productName, oldQuantity, request.getQuantity());
         }
 
-        // Refresh cart
         cart = cartService.getCart(customerId, pharmacyId)
                 .orElseGet(() -> {
                     User customer = userService.getById(customerId);
@@ -178,11 +177,11 @@ public class CartController {
         return ResponseEntity.ok(ApiResponse.success("Cart updated", cartMapper.toResponse(cart)));
     }
 
-    /**
-     * Remove item from cart
-     * DELETE /api/customer/cart/{pharmacyId}/items/{itemId}
-     */
     @DeleteMapping("/{pharmacyId}/items/{itemId}")
+    @Operation(
+            summary = "Remove item from cart",
+            description = "Remove a product from the shopping cart"
+    )
     public ResponseEntity<ApiResponse<CartResponse>> removeFromCart(
             @PathVariable Long pharmacyId,
             @PathVariable Long itemId) {
@@ -190,14 +189,11 @@ public class CartController {
         Long customerId = getCurrentCustomerId();
         String customerEmail = securityUtils.getCurrentUserEmail().orElse("unknown");
 
-        // Validate pharmacy
         pharmacyService.validatePharmacyActive(pharmacyId);
 
-        // Get cart and validate ownership
         Cart cart = cartService.getCart(customerId, pharmacyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart", "pharmacyId", pharmacyId.toString()));
 
-        // Validate item belongs to cart
         CartItem item = cart.getItems().stream()
                 .filter(i -> i.getId().equals(itemId))
                 .findFirst()
@@ -206,13 +202,10 @@ public class CartController {
         String productName = item.getProduct().getName();
         Long productId = item.getProduct().getId();
 
-        // Remove item
         cartService.removeFromCart(itemId);
 
-        // Audit log
         auditLogService.logCartItemRemoved(pharmacyId, customerId, customerEmail, cart.getId(), productId, productName);
 
-        // Refresh cart
         cart = cartService.getCart(customerId, pharmacyId)
                 .orElseGet(() -> {
                     User customer = userService.getById(customerId);
@@ -225,26 +218,22 @@ public class CartController {
         return ResponseEntity.ok(ApiResponse.success("Item removed from cart", cartMapper.toResponse(cart)));
     }
 
-    /**
-     * Clear entire cart
-     * DELETE /api/customer/cart/{pharmacyId}
-     */
     @DeleteMapping("/{pharmacyId}")
+    @Operation(
+            summary = "Clear cart",
+            description = "Remove all items from the shopping cart"
+    )
     public ResponseEntity<ApiResponse<CartResponse>> clearCart(@PathVariable Long pharmacyId) {
         Long customerId = getCurrentCustomerId();
         String customerEmail = securityUtils.getCurrentUserEmail().orElse("unknown");
 
-        // Get cart
         Cart cart = cartService.getCart(customerId, pharmacyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart", "pharmacyId", pharmacyId.toString()));
 
-        // Clear cart
         cartService.clearCart(cart.getId());
 
-        // Audit log
         auditLogService.logCartCleared(pharmacyId, customerId, customerEmail, cart.getId(), "User cleared cart");
 
-        // Return empty cart
         User customer = userService.getById(customerId);
         Pharmacy pharmacy = pharmacyService.getById(pharmacyId);
         cart = cartService.getOrCreateCart(customer, pharmacy);
@@ -254,11 +243,11 @@ public class CartController {
         return ResponseEntity.ok(ApiResponse.success("Cart cleared", cartMapper.toResponse(cart)));
     }
 
-    /**
-     * Get cart item count (for header badge)
-     * GET /api/customer/cart/{pharmacyId}/count
-     */
     @GetMapping("/{pharmacyId}/count")
+    @Operation(
+            summary = "Get cart item count",
+            description = "Get number of items in cart (for header badge)"
+    )
     public ResponseEntity<Map<String, Integer>> getCartItemCount(@PathVariable Long pharmacyId) {
         Long customerId = getCurrentCustomerId();
 
@@ -269,22 +258,19 @@ public class CartController {
         return ResponseEntity.ok(Map.of("count", count));
     }
 
-    /**
-     * Validate cart before checkout
-     * GET /api/customer/cart/{pharmacyId}/validate
-     */
     @GetMapping("/{pharmacyId}/validate")
+    @Operation(
+            summary = "Validate cart",
+            description = "Check if cart is valid for checkout (stock availability)"
+    )
     public ResponseEntity<ApiResponse<CartResponse>> validateCart(@PathVariable Long pharmacyId) {
         Long customerId = getCurrentCustomerId();
 
-        // Validate pharmacy
         pharmacyService.validatePharmacyActive(pharmacyId);
 
-        // Get cart
         Cart cart = cartService.getCart(customerId, pharmacyId)
                 .orElseThrow(() -> new BadRequestException("Cart is empty"));
 
-        // Check for unavailable items
         var unavailableItems = cartService.getUnavailableItems(cart.getId());
 
         CartResponse response = cartMapper.toResponse(cart);

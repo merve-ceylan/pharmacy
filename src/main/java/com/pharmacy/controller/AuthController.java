@@ -1,16 +1,22 @@
 package com.pharmacy.controller;
 
-import com.pharmacy.dto.common.UserDto;
 import com.pharmacy.dto.request.*;
 import com.pharmacy.dto.response.AuthResponse;
-import com.pharmacy.exception.BadRequestException;
+import com.pharmacy.dto.common.UserDto;
+import com.pharmacy.entity.User;
 import com.pharmacy.security.SecurityUtils;
 import com.pharmacy.service.AuthService;
+import com.pharmacy.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -19,23 +25,30 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Authentication", description = "Authentication and authorization endpoints")
 public class AuthController {
 
-    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
-
     private final AuthService authService;
+    private final UserService userService;
     private final SecurityUtils securityUtils;
 
-    public AuthController(AuthService authService, SecurityUtils securityUtils) {
+    public AuthController(AuthService authService, UserService userService, SecurityUtils securityUtils) {
         this.authService = authService;
+        this.userService = userService;
         this.securityUtils = securityUtils;
     }
 
-    /**
-     * Login endpoint
-     * POST /api/auth/login
-     */
     @PostMapping("/login")
+    @Operation(
+            summary = "User login",
+            description = "Authenticate user with email and password. Returns JWT access token and refresh token."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Login successful",
+                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Invalid credentials"),
+            @ApiResponse(responseCode = "423", description = "Account locked")
+    })
     public ResponseEntity<AuthResponse> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
@@ -47,12 +60,18 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Register new customer
-     * POST /api/auth/register
-     */
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> registerCustomer(
+    @Operation(
+            summary = "Customer registration",
+            description = "Register a new customer account. Only customers can self-register."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Registration successful",
+                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation error or email already exists"),
+            @ApiResponse(responseCode = "422", description = "Password validation failed")
+    })
+    public ResponseEntity<AuthResponse> register(
             @Valid @RequestBody RegisterRequest request,
             HttpServletRequest httpRequest) {
 
@@ -60,174 +79,191 @@ public class AuthController {
         String userAgent = httpRequest.getHeader("User-Agent");
 
         AuthResponse response = authService.registerCustomer(request, ipAddress, userAgent);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.ok(response);
     }
 
-    /**
-     * Register pharmacy owner (Super Admin only)
-     * POST /api/auth/register/pharmacy-owner
-     */
     @PostMapping("/register/pharmacy-owner")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Map<String, Object>> registerPharmacyOwner(
+    @Operation(
+            summary = "Register pharmacy owner",
+            description = "Create a new pharmacy owner account. Only Super Admin can perform this action.",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pharmacy owner created"),
+            @ApiResponse(responseCode = "403", description = "Access denied - Super Admin only"),
+            @ApiResponse(responseCode = "400", description = "Validation error")
+    })
+    public ResponseEntity<UserDto> registerPharmacyOwner(
             @Valid @RequestBody RegisterPharmacyOwnerRequest request) {
 
         Long adminId = securityUtils.getCurrentUserId().orElse(null);
         String adminEmail = securityUtils.getCurrentUserEmail().orElse("system");
 
-        var user = authService.registerPharmacyOwner(request, adminId, adminEmail);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                "success", true,
-                "message", "Pharmacy owner created successfully",
-                "userId", user.getId(),
-                "email", user.getEmail()
-        ));
+        User user = authService.registerPharmacyOwner(request, adminId, adminEmail);
+        return ResponseEntity.ok(mapToUserDto(user));
     }
 
-    /**
-     * Register staff (Pharmacy Owner only)
-     * POST /api/auth/register/staff
-     */
     @PostMapping("/register/staff")
     @PreAuthorize("hasRole('PHARMACY_OWNER')")
-    public ResponseEntity<Map<String, Object>> registerStaff(
+    @Operation(
+            summary = "Register staff member",
+            description = "Create a new staff account for the pharmacy. Only Pharmacy Owner can perform this action.",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Staff member created"),
+            @ApiResponse(responseCode = "403", description = "Access denied - Pharmacy Owner only"),
+            @ApiResponse(responseCode = "400", description = "Validation error")
+    })
+    public ResponseEntity<UserDto> registerStaff(
             @Valid @RequestBody RegisterStaffRequest request) {
 
-        Long ownerId = securityUtils.getCurrentUserId()
-                .orElseThrow(() -> new BadRequestException("User not authenticated"));
-        String ownerEmail = securityUtils.getCurrentUserEmail().orElse("unknown");
-        Long pharmacyId = securityUtils.getCurrentPharmacyId()
-                .orElseThrow(() -> new BadRequestException("Pharmacy not found for user"));
+        Long ownerId = securityUtils.getCurrentUserId().orElse(null);
+        String ownerEmail = securityUtils.getCurrentUserEmail().orElse("system");
+        Long pharmacyId = securityUtils.getCurrentPharmacyId().orElse(null);
 
-        var user = authService.registerStaff(request, ownerId, ownerEmail, pharmacyId);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                "success", true,
-                "message", "Staff member created successfully",
-                "userId", user.getId(),
-                "email", user.getEmail()
-        ));
+        User user = authService.registerStaff(request, ownerId, ownerEmail, pharmacyId);
+        return ResponseEntity.ok(mapToUserDto(user));
     }
 
-    /**
-     * Logout - invalidate token
-     * POST /api/auth/logout
-     */
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, Object>> logout(HttpServletRequest httpRequest) {
-        String authHeader = httpRequest.getHeader("Authorization");
-        String ipAddress = SecurityUtils.getClientIP(httpRequest);
-
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Logout",
+            description = "Invalidate the current access token",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Logout successful"),
+            @ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    public ResponseEntity<Map<String, String>> logout(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
             Long userId = securityUtils.getCurrentUserId().orElse(null);
             String userEmail = securityUtils.getCurrentUserEmail().orElse("unknown");
+            String ipAddress = SecurityUtils.getClientIP(request);
 
             authService.logout(token, userId, userEmail, ipAddress);
         }
-
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Logged out successfully"
-        ));
+        return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
     }
 
-    /**
-     * Refresh access token
-     * POST /api/auth/refresh
-     */
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refreshToken(
-            @Valid @RequestBody RefreshTokenRequest request) {
-
+    @Operation(
+            summary = "Refresh access token",
+            description = "Get a new access token using a valid refresh token"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Token refreshed",
+                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Invalid or expired refresh token")
+    })
+    public ResponseEntity<AuthResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
         AuthResponse response = authService.refreshToken(request.getRefreshToken());
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get current user info
-     * GET /api/auth/me
-     */
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Get current user",
+            description = "Get the profile of the currently authenticated user",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "User profile returned",
+                    content = @Content(schema = @Schema(implementation = UserDto.class))),
+            @ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
     public ResponseEntity<UserDto> getCurrentUser() {
         Long userId = securityUtils.getCurrentUserId()
-                .orElseThrow(() -> new BadRequestException("User not authenticated"));
-
-        UserDto user = authService.getCurrentUser(userId);
-        return ResponseEntity.ok(user);
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userService.getById(userId);
+        return ResponseEntity.ok(mapToUserDto(user));
     }
 
-    /**
-     * Change password
-     * POST /api/auth/change-password
-     */
     @PostMapping("/change-password")
-    public ResponseEntity<Map<String, Object>> changePassword(
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Change password",
+            description = "Change the password for the current user",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Password changed successfully"),
+            @ApiResponse(responseCode = "400", description = "Current password incorrect"),
+            @ApiResponse(responseCode = "422", description = "New password validation failed")
+    })
+    public ResponseEntity<Map<String, String>> changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
             HttpServletRequest httpRequest) {
 
-        // Validate password match
-        if (!request.isPasswordMatch()) {
-            throw new BadRequestException("New password and confirm password do not match");
-        }
-
         Long userId = securityUtils.getCurrentUserId()
-                .orElseThrow(() -> new BadRequestException("User not authenticated"));
+                .orElseThrow(() -> new RuntimeException("User not found"));
         String ipAddress = SecurityUtils.getClientIP(httpRequest);
 
         authService.changePassword(request, userId, ipAddress);
-
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Password changed successfully"
-        ));
+        return ResponseEntity.ok(Map.of("message", "Password changed successfully"));
     }
 
-    /**
-     * Request password reset
-     * POST /api/auth/forgot-password
-     */
     @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, Object>> forgotPassword(
+    @Operation(
+            summary = "Request password reset",
+            description = "Send a password reset link to the user's email"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Reset email sent (if account exists)")
+    })
+    public ResponseEntity<Map<String, String>> forgotPassword(
             @Valid @RequestBody PasswordResetRequest request,
             HttpServletRequest httpRequest) {
 
         String ipAddress = SecurityUtils.getClientIP(httpRequest);
-
         authService.requestPasswordReset(request.getEmail(), ipAddress);
-
-        // Always return success to prevent user enumeration
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "If the email exists, a password reset link has been sent"
-        ));
+        return ResponseEntity.ok(Map.of("message", "If an account exists, a password reset email has been sent"));
     }
 
-    /**
-     * Check if email is available
-     * GET /api/auth/check-email?email=xxx
-     */
     @GetMapping("/check-email")
-    public ResponseEntity<Map<String, Object>> checkEmail(@RequestParam String email) {
-        // This endpoint intentionally doesn't reveal if email exists
-        // Just validates format
-        boolean validFormat = email != null && email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
-
-        return ResponseEntity.ok(Map.of(
-                "valid", validFormat
-        ));
+    @Operation(
+            summary = "Check email availability",
+            description = "Check if an email address is available for registration"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Check completed")
+    })
+    public ResponseEntity<Map<String, Boolean>> checkEmail(
+            @Parameter(description = "Email to check") @RequestParam String email) {
+        boolean available = !userService.emailExists(email);
+        return ResponseEntity.ok(Map.of("available", available));
     }
 
-    /**
-     * Health check for auth service
-     * GET /api/auth/health
-     */
     @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> health() {
-        return ResponseEntity.ok(Map.of(
-                "status", "UP",
-                "service", "auth"
-        ));
+    @Operation(
+            summary = "Health check",
+            description = "Check if the authentication service is running"
+    )
+    @ApiResponse(responseCode = "200", description = "Service is healthy")
+    public ResponseEntity<Map<String, String>> health() {
+        return ResponseEntity.ok(Map.of("status", "OK", "service", "auth"));
+    }
+
+    private UserDto mapToUserDto(User user) {
+        UserDto dto = new UserDto();
+        dto.setId(user.getId());
+        dto.setEmail(user.getEmail());
+        dto.setFirstName(user.getFirstName());
+        dto.setLastName(user.getLastName());
+        dto.setPhone(user.getPhone());
+        dto.setRole(user.getRole().name());
+        dto.setActive(user.isActive());
+        dto.setEmailVerified(user.isEmailVerified());
+        if (user.getPharmacy() != null) {
+            dto.setPharmacyId(user.getPharmacy().getId());
+            dto.setPharmacyName(user.getPharmacy().getName());
+        }
+        return dto;
     }
 }

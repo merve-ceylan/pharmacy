@@ -1,8 +1,11 @@
 package com.pharmacy.config;
 
 import com.pharmacy.security.JwtAuthenticationFilter;
+import com.pharmacy.security.RateLimitingFilter;
+import com.pharmacy.security.SecurityExceptionHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -26,14 +29,22 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@EnableScheduling
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final RateLimitingFilter rateLimitingFilter;
     private final UserDetailsService userDetailsService;
+    private final SecurityExceptionHandler securityExceptionHandler;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, UserDetailsService userDetailsService) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter,
+                          RateLimitingFilter rateLimitingFilter,
+                          UserDetailsService userDetailsService,
+                          SecurityExceptionHandler securityExceptionHandler) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.rateLimitingFilter = rateLimitingFilter;
         this.userDetailsService = userDetailsService;
+        this.securityExceptionHandler = securityExceptionHandler;
     }
 
     @Bean
@@ -45,6 +56,12 @@ public class SecurityConfig {
                 // Enable CORS
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
+                // Exception handling
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(securityExceptionHandler)
+                        .accessDeniedHandler(securityExceptionHandler)
+                )
+
                 // URL authorization rules
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints - no authentication required
@@ -54,7 +71,11 @@ public class SecurityConfig {
                                 "/api/health",            // Health check
                                 "/h2-console/**",         // H2 console (development only)
                                 "/swagger-ui/**",         // Swagger UI
-                                "/v3/api-docs/**"         // OpenAPI docs
+                                "/swagger-ui.html",       // Swagger UI HTML
+                                "/swagger-resources/**",  // Swagger resources
+                                "/v3/api-docs/**",        // OpenAPI docs
+                                "/v3/api-docs",           // OpenAPI docs root
+                                "/webjars/**"             // Swagger webjars
                         ).permitAll()
 
                         // Super Admin only endpoints
@@ -81,7 +102,10 @@ public class SecurityConfig {
                 // Authentication provider
                 .authenticationProvider(authenticationProvider())
 
-                // Add JWT filter before UsernamePasswordAuthenticationFilter
+                // Add rate limiting filter first
+                .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
+
+                // Add JWT filter
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
 
                 // For H2 console frame options (development only)
@@ -92,7 +116,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new BCryptPasswordEncoder(12); // Strength 12 for better security
     }
 
     @Bean
@@ -135,7 +159,12 @@ public class SecurityConfig {
         ));
 
         // Exposed headers (client can read these)
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setExposedHeaders(Arrays.asList(
+                "Authorization",
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining",
+                "X-RateLimit-Reset"
+        ));
 
         // Allow credentials (cookies, authorization headers)
         configuration.setAllowCredentials(true);

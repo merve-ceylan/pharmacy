@@ -10,6 +10,11 @@ import com.pharmacy.mapper.CategoryMapper;
 import com.pharmacy.security.SecurityUtils;
 import com.pharmacy.service.AuditLogService;
 import com.pharmacy.service.CategoryService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +27,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Categories", description = "Category management endpoints")
 public class CategoryController {
 
     private static final Logger log = LoggerFactory.getLogger(CategoryController.class);
@@ -43,11 +49,11 @@ public class CategoryController {
 
     // ==================== PUBLIC ENDPOINTS ====================
 
-    /**
-     * Get all active root categories with children (for storefront menu)
-     * GET /api/public/categories
-     */
     @GetMapping("/public/categories")
+    @Operation(
+            summary = "List all categories",
+            description = "Get all active root categories with their children (for storefront menu)"
+    )
     public ResponseEntity<List<CategoryResponse>> getPublicCategories() {
         List<Category> categories = categoryService.findRootCategories();
         List<CategoryResponse> responses = categories.stream()
@@ -56,11 +62,15 @@ public class CategoryController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get single category by slug
-     * GET /api/public/categories/slug/{slug}
-     */
     @GetMapping("/public/categories/slug/{slug}")
+    @Operation(
+            summary = "Get category by slug",
+            description = "Get a category by its URL-friendly slug"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Category found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Category not found")
+    })
     public ResponseEntity<CategoryResponse> getCategoryBySlug(@PathVariable String slug) {
         Category category = categoryService.getBySlug(slug);
 
@@ -71,12 +81,13 @@ public class CategoryController {
         return ResponseEntity.ok(categoryMapper.toResponseWithChildren(category));
     }
 
-    /**
-     * Get subcategories of a parent
-     * GET /api/public/categories/{parentId}/subcategories
-     */
     @GetMapping("/public/categories/{parentId}/subcategories")
-    public ResponseEntity<List<CategoryResponse>> getSubcategories(@PathVariable Long parentId) {
+    @Operation(
+            summary = "Get subcategories",
+            description = "List subcategories of a parent category"
+    )
+    public ResponseEntity<List<CategoryResponse>> getSubcategories(
+            @Parameter(description = "Parent category ID") @PathVariable Long parentId) {
         List<Category> categories = categoryService.findSubcategories(parentId);
         List<CategoryResponse> responses = categories.stream()
                 .map(categoryMapper::toResponse)
@@ -84,14 +95,15 @@ public class CategoryController {
         return ResponseEntity.ok(responses);
     }
 
-    // ==================== ADMIN ENDPOINTS (Super Admin Only) ====================
+    // ==================== ADMIN ENDPOINTS ====================
 
-    /**
-     * Get all categories (including inactive)
-     * GET /api/admin/categories
-     */
     @GetMapping("/admin/categories")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "List all categories (Admin)",
+            description = "Get all categories including inactive ones",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<List<CategoryResponse>> getAllCategories() {
         List<Category> categories = categoryService.findAll();
         List<CategoryResponse> responses = categories.stream()
@@ -100,23 +112,30 @@ public class CategoryController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get single category by ID
-     * GET /api/admin/categories/{id}
-     */
     @GetMapping("/admin/categories/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Get category by ID",
+            description = "Get a category with its children",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<CategoryResponse> getCategoryById(@PathVariable Long id) {
         Category category = categoryService.getById(id);
         return ResponseEntity.ok(categoryMapper.toResponseWithChildren(category));
     }
 
-    /**
-     * Create new category
-     * POST /api/admin/categories
-     */
     @PostMapping("/admin/categories")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Create category",
+            description = "Create a new category (optionally as subcategory)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Category created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Slug already exists")
+    })
     public ResponseEntity<ApiResponse<CategoryResponse>> createCategory(
             @Valid @RequestBody CategoryCreateRequest request) {
 
@@ -125,14 +144,12 @@ public class CategoryController {
 
         Category category = categoryMapper.toEntity(request);
 
-        // Handle parent category
         if (request.getParentId() != null) {
             category = categoryService.createSubcategory(category, request.getParentId());
         } else {
             category = categoryService.createCategory(category);
         }
 
-        // Audit log
         auditLogService.logCategoryCreated(userId, userEmail, category.getId(), category.getName());
         log.info("Category created: {} by user: {}", category.getName(), userEmail);
 
@@ -140,12 +157,13 @@ public class CategoryController {
                 .body(ApiResponse.success("Category created successfully", categoryMapper.toResponse(category)));
     }
 
-    /**
-     * Update category
-     * PUT /api/admin/categories/{id}
-     */
     @PutMapping("/admin/categories/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Update category",
+            description = "Update an existing category",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<CategoryResponse>> updateCategory(
             @PathVariable Long id,
             @Valid @RequestBody CategoryUpdateRequest request) {
@@ -155,7 +173,6 @@ public class CategoryController {
 
         Category category = categoryService.getById(id);
 
-        // Handle parent change
         if (request.getParentId() != null) {
             if (request.getParentId().equals(id)) {
                 throw new BadRequestException("Category cannot be its own parent");
@@ -167,33 +184,34 @@ public class CategoryController {
         categoryMapper.updateEntity(category, request);
         category = categoryService.updateCategory(category);
 
-        // Audit log
         auditLogService.logCategoryUpdated(userId, userEmail, category.getId(), category.getName(), "Category updated");
         log.info("Category updated: {} by user: {}", category.getName(), userEmail);
 
         return ResponseEntity.ok(ApiResponse.success("Category updated successfully", categoryMapper.toResponse(category)));
     }
 
-    /**
-     * Update display order
-     * PATCH /api/admin/categories/{id}/order
-     */
     @PatchMapping("/admin/categories/{id}/order")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Update display order",
+            description = "Change the display order of a category",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<CategoryResponse>> updateDisplayOrder(
             @PathVariable Long id,
-            @RequestParam Integer order) {
+            @Parameter(description = "New display order") @RequestParam Integer order) {
 
         Category category = categoryService.updateDisplayOrder(id, order);
         return ResponseEntity.ok(ApiResponse.success("Display order updated", categoryMapper.toResponse(category)));
     }
 
-    /**
-     * Activate category
-     * PATCH /api/admin/categories/{id}/activate
-     */
     @PatchMapping("/admin/categories/{id}/activate")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Activate category",
+            description = "Activate a category to make it visible",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<CategoryResponse>> activateCategory(@PathVariable Long id) {
         Long userId = securityUtils.getCurrentUserId().orElse(null);
         String userEmail = securityUtils.getCurrentUserEmail().orElse("system");
@@ -205,12 +223,13 @@ public class CategoryController {
         return ResponseEntity.ok(ApiResponse.success("Category activated", categoryMapper.toResponse(category)));
     }
 
-    /**
-     * Deactivate category (also deactivates children)
-     * PATCH /api/admin/categories/{id}/deactivate
-     */
     @PatchMapping("/admin/categories/{id}/deactivate")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Deactivate category",
+            description = "Deactivate a category (also deactivates children)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<CategoryResponse>> deactivateCategory(@PathVariable Long id) {
         Long userId = securityUtils.getCurrentUserId().orElse(null);
         String userEmail = securityUtils.getCurrentUserEmail().orElse("system");
@@ -222,13 +241,15 @@ public class CategoryController {
         return ResponseEntity.ok(ApiResponse.success("Category deactivated", categoryMapper.toResponse(category)));
     }
 
-    /**
-     * Check if slug is available
-     * GET /api/admin/categories/check-slug?slug=xxx
-     */
     @GetMapping("/admin/categories/check-slug")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Boolean>> checkSlugAvailability(@RequestParam String slug) {
+    @Operation(
+            summary = "Check slug availability",
+            description = "Check if a slug is available for use",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    public ResponseEntity<ApiResponse<Boolean>> checkSlugAvailability(
+            @Parameter(description = "Slug to check") @RequestParam String slug) {
         boolean available = categoryService.isSlugAvailable(slug);
         return ResponseEntity.ok(ApiResponse.success("Slug availability checked", available));
     }

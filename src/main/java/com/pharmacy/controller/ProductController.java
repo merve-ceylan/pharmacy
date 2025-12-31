@@ -18,6 +18,13 @@ import com.pharmacy.service.AuditLogService;
 import com.pharmacy.service.CategoryService;
 import com.pharmacy.service.PharmacyService;
 import com.pharmacy.service.ProductService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +41,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Products", description = "Product management endpoints")
 public class ProductController {
 
     private static final Logger log = LoggerFactory.getLogger(ProductController.class);
@@ -61,19 +69,22 @@ public class ProductController {
 
     // ==================== PUBLIC ENDPOINTS ====================
 
-    /**
-     * Get products for a pharmacy (public storefront)
-     * GET /api/public/pharmacies/{pharmacyId}/products
-     */
     @GetMapping("/public/pharmacies/{pharmacyId}/products")
+    @Operation(
+            summary = "List pharmacy products",
+            description = "Get paginated list of products for a pharmacy (public storefront)"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Products retrieved"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Pharmacy not active")
+    })
     public ResponseEntity<PageResponse<ProductResponse>> getPublicProducts(
-            @PathVariable Long pharmacyId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "name") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
+            @Parameter(description = "Pharmacy ID") @PathVariable Long pharmacyId,
+            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort field") @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "asc") String sortDir) {
 
-        // Validate pharmacy exists and is active
         pharmacyService.validatePharmacyActive(pharmacyId);
 
         Sort sort = sortDir.equalsIgnoreCase("desc")
@@ -87,11 +98,15 @@ public class ProductController {
         return ResponseEntity.ok(PageResponse.of(responsePage));
     }
 
-    /**
-     * Get single product by slug (public)
-     * GET /api/public/pharmacies/{pharmacyId}/products/slug/{slug}
-     */
     @GetMapping("/public/pharmacies/{pharmacyId}/products/slug/{slug}")
+    @Operation(
+            summary = "Get product by slug",
+            description = "Get a single product by its URL-friendly slug"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Product found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Product not found")
+    })
     public ResponseEntity<ProductResponse> getPublicProductBySlug(
             @PathVariable Long pharmacyId,
             @PathVariable String slug) {
@@ -108,11 +123,11 @@ public class ProductController {
         return ResponseEntity.ok(productMapper.toResponse(product));
     }
 
-    /**
-     * Get products by category (public)
-     * GET /api/public/pharmacies/{pharmacyId}/products/category/{categoryId}
-     */
     @GetMapping("/public/pharmacies/{pharmacyId}/products/category/{categoryId}")
+    @Operation(
+            summary = "Get products by category",
+            description = "List all products in a specific category"
+    )
     public ResponseEntity<List<ProductResponse>> getPublicProductsByCategory(
             @PathVariable Long pharmacyId,
             @PathVariable Long categoryId) {
@@ -127,11 +142,11 @@ public class ProductController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get featured products (public)
-     * GET /api/public/pharmacies/{pharmacyId}/products/featured
-     */
     @GetMapping("/public/pharmacies/{pharmacyId}/products/featured")
+    @Operation(
+            summary = "Get featured products",
+            description = "List featured products for the pharmacy homepage"
+    )
     public ResponseEntity<List<ProductResponse>> getFeaturedProducts(@PathVariable Long pharmacyId) {
         pharmacyService.validatePharmacyActive(pharmacyId);
 
@@ -143,14 +158,14 @@ public class ProductController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Search products (public)
-     * GET /api/public/pharmacies/{pharmacyId}/products/search?q=keyword
-     */
     @GetMapping("/public/pharmacies/{pharmacyId}/products/search")
+    @Operation(
+            summary = "Search products",
+            description = "Search products by name or description"
+    )
     public ResponseEntity<PageResponse<ProductResponse>> searchProducts(
             @PathVariable Long pharmacyId,
-            @RequestParam("q") String keyword,
+            @Parameter(description = "Search keyword (min 2 chars)") @RequestParam("q") String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
@@ -167,14 +182,15 @@ public class ProductController {
         return ResponseEntity.ok(PageResponse.of(responsePage));
     }
 
-    // ==================== STAFF ENDPOINTS (Pharmacy Owner & Staff) ====================
+    // ==================== STAFF ENDPOINTS ====================
 
-    /**
-     * Get all products for pharmacy management
-     * GET /api/staff/products
-     */
     @GetMapping("/staff/products")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "List all products (Staff)",
+            description = "Get all products for the pharmacy (admin view)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<PageResponse<ProductResponse>> getProducts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -194,12 +210,13 @@ public class ProductController {
         return ResponseEntity.ok(PageResponse.of(responsePage));
     }
 
-    /**
-     * Get single product by ID
-     * GET /api/staff/products/{id}
-     */
     @GetMapping("/staff/products/{id}")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get product by ID",
+            description = "Get a single product by its ID",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ProductResponse> getProduct(@PathVariable Long id) {
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -209,12 +226,18 @@ public class ProductController {
         return ResponseEntity.ok(productMapper.toResponse(product));
     }
 
-    /**
-     * Create new product
-     * POST /api/staff/products
-     */
     @PostMapping("/staff/products")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Create product",
+            description = "Create a new product",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Product created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "SKU already exists")
+    })
     public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
             @Valid @RequestBody ProductCreateRequest request) {
 
@@ -228,7 +251,6 @@ public class ProductController {
         Product product = productMapper.toEntity(request);
         product = productService.createProduct(product, pharmacy, category);
 
-        // Audit log
         auditLogService.logProductCreated(pharmacyId, userId, userEmail,
                 product.getId(), product.getName(), product.getSku());
 
@@ -238,12 +260,13 @@ public class ProductController {
                 .body(ApiResponse.success("Product created successfully", productMapper.toResponse(product)));
     }
 
-    /**
-     * Update product
-     * PUT /api/staff/products/{id}
-     */
     @PutMapping("/staff/products/{id}")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Update product",
+            description = "Update an existing product",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
             @PathVariable Long id,
             @Valid @RequestBody ProductUpdateRequest request) {
@@ -255,7 +278,6 @@ public class ProductController {
         Product product = productService.getById(id);
         validateProductBelongsToPharmacy(product, pharmacyId);
 
-        // Handle category change
         if (request.getCategoryId() != null &&
                 !request.getCategoryId().equals(product.getCategory().getId())) {
             Category newCategory = categoryService.getById(request.getCategoryId());
@@ -265,7 +287,6 @@ public class ProductController {
         productMapper.updateEntity(product, request);
         product = productService.updateProduct(product);
 
-        // Audit log
         auditLogService.logProductUpdated(pharmacyId, userId, userEmail,
                 product.getId(), product.getName(), "Product details updated");
 
@@ -274,12 +295,13 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Product updated successfully", productMapper.toResponse(product)));
     }
 
-    /**
-     * Update stock quantity
-     * PATCH /api/staff/products/{id}/stock
-     */
     @PatchMapping("/staff/products/{id}/stock")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Update stock",
+            description = "Update product stock quantity",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<ProductResponse>> updateStock(
             @PathVariable Long id,
             @Valid @RequestBody StockUpdateRequest request) {
@@ -294,7 +316,6 @@ public class ProductController {
         Integer oldStock = product.getStockQuantity();
         product = productService.updateStock(id, request.getQuantity());
 
-        // Audit log
         auditLogService.logProductStockChanged(pharmacyId, userId, userEmail,
                 product.getId(), product.getName(), oldStock, request.getQuantity(),
                 request.getReason() != null ? request.getReason() : "Manual update");
@@ -305,15 +326,16 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Stock updated successfully", productMapper.toResponse(product)));
     }
 
-    /**
-     * Toggle featured status
-     * PATCH /api/staff/products/{id}/featured
-     */
     @PatchMapping("/staff/products/{id}/featured")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Toggle featured status",
+            description = "Mark or unmark a product as featured",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<ProductResponse>> toggleFeatured(
             @PathVariable Long id,
-            @RequestParam boolean featured) {
+            @Parameter(description = "Featured status") @RequestParam boolean featured) {
 
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -326,12 +348,13 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(message, productMapper.toResponse(product)));
     }
 
-    /**
-     * Activate product
-     * PATCH /api/staff/products/{id}/activate
-     */
     @PatchMapping("/staff/products/{id}/activate")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Activate product",
+            description = "Activate a product to make it visible in storefront",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<ProductResponse>> activateProduct(@PathVariable Long id) {
         Long pharmacyId = getCurrentPharmacyId();
         Long userId = securityUtils.getCurrentUserId().orElse(null);
@@ -347,12 +370,13 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Product activated", productMapper.toResponse(product)));
     }
 
-    /**
-     * Deactivate product
-     * PATCH /api/staff/products/{id}/deactivate
-     */
     @PatchMapping("/staff/products/{id}/deactivate")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Deactivate product",
+            description = "Deactivate a product to hide it from storefront",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<ProductResponse>> deactivateProduct(@PathVariable Long id) {
         Long pharmacyId = getCurrentPharmacyId();
         Long userId = securityUtils.getCurrentUserId().orElse(null);
@@ -368,12 +392,13 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Product deactivated", productMapper.toResponse(product)));
     }
 
-    /**
-     * Get low stock products
-     * GET /api/staff/products/low-stock
-     */
     @GetMapping("/staff/products/low-stock")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get low stock products",
+            description = "List products with stock below threshold",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<List<ProductResponse>> getLowStockProducts() {
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -385,12 +410,13 @@ public class ProductController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get out of stock products
-     * GET /api/staff/products/out-of-stock
-     */
     @GetMapping("/staff/products/out-of-stock")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get out of stock products",
+            description = "List products with zero stock",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<List<ProductResponse>> getOutOfStockProducts() {
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -402,12 +428,13 @@ public class ProductController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get product count
-     * GET /api/staff/products/count
-     */
     @GetMapping("/staff/products/count")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get product count",
+            description = "Get total number of products",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<Long>> getProductCount() {
         Long pharmacyId = getCurrentPharmacyId();
         long count = productService.countByPharmacy(pharmacyId);

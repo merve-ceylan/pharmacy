@@ -20,6 +20,11 @@ import com.pharmacy.service.AuthService;
 import com.pharmacy.service.PharmacyService;
 import com.pharmacy.service.ProductService;
 import com.pharmacy.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +38,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Pharmacy", description = "Pharmacy management endpoints")
 public class PharmacyController {
 
     private static final Logger log = LoggerFactory.getLogger(PharmacyController.class);
@@ -63,11 +69,15 @@ public class PharmacyController {
 
     // ==================== PUBLIC ENDPOINTS ====================
 
-    /**
-     * Get pharmacy info by subdomain (for storefront)
-     * GET /api/public/pharmacies/subdomain/{subdomain}
-     */
     @GetMapping("/public/pharmacies/subdomain/{subdomain}")
+    @Operation(
+            summary = "Get pharmacy by subdomain",
+            description = "Get pharmacy info for storefront (by subdomain)"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Pharmacy found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Pharmacy not found or inactive")
+    })
     public ResponseEntity<PharmacyPublicResponse> getPharmacyBySubdomain(@PathVariable String subdomain) {
         Pharmacy pharmacy = pharmacyService.findBySubdomain(subdomain.toLowerCase())
                 .orElseThrow(() -> new BadRequestException("Pharmacy not found"));
@@ -77,11 +87,11 @@ public class PharmacyController {
         return ResponseEntity.ok(pharmacyMapper.toPublicResponse(pharmacy));
     }
 
-    /**
-     * Get pharmacy info by custom domain (for storefront)
-     * GET /api/public/pharmacies/domain/{domain}
-     */
     @GetMapping("/public/pharmacies/domain/{domain}")
+    @Operation(
+            summary = "Get pharmacy by custom domain",
+            description = "Get pharmacy info for storefront (by custom domain)"
+    )
     public ResponseEntity<PharmacyPublicResponse> getPharmacyByDomain(@PathVariable String domain) {
         Pharmacy pharmacy = pharmacyService.findByCustomDomain(domain)
                 .orElseThrow(() -> new BadRequestException("Pharmacy not found"));
@@ -91,11 +101,11 @@ public class PharmacyController {
         return ResponseEntity.ok(pharmacyMapper.toPublicResponse(pharmacy));
     }
 
-    /**
-     * Get pharmacy public info by ID
-     * GET /api/public/pharmacies/{id}
-     */
     @GetMapping("/public/pharmacies/{id}")
+    @Operation(
+            summary = "Get pharmacy by ID",
+            description = "Get public pharmacy info by ID"
+    )
     public ResponseEntity<PharmacyPublicResponse> getPharmacyPublic(@PathVariable Long id) {
         Pharmacy pharmacy = pharmacyService.getById(id);
         pharmacyService.validatePharmacyActive(id);
@@ -103,14 +113,15 @@ public class PharmacyController {
         return ResponseEntity.ok(pharmacyMapper.toPublicResponse(pharmacy));
     }
 
-    // ==================== ADMIN ENDPOINTS (Super Admin Only) ====================
+    // ==================== ADMIN ENDPOINTS ====================
 
-    /**
-     * Get all pharmacies
-     * GET /api/admin/pharmacies
-     */
     @GetMapping("/admin/pharmacies")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "List all pharmacies",
+            description = "Get all pharmacies (Super Admin only)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<List<PharmacyResponse>> getAllPharmacies() {
         List<Pharmacy> pharmacies = pharmacyService.findAll();
         List<PharmacyResponse> responses = pharmacies.stream()
@@ -119,56 +130,56 @@ public class PharmacyController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get pharmacy by ID (admin view with full details)
-     * GET /api/admin/pharmacies/{id}
-     */
     @GetMapping("/admin/pharmacies/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Get pharmacy details",
+            description = "Get full pharmacy details with stats",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<PharmacyResponse> getPharmacy(@PathVariable Long id) {
         Pharmacy pharmacy = pharmacyService.getById(id);
         PharmacyResponse response = pharmacyMapper.toResponse(pharmacy);
 
-        // Add stats
         response.setProductCount(productService.countByPharmacy(id));
 
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Create new pharmacy with owner
-     * POST /api/admin/pharmacies
-     */
     @PostMapping("/admin/pharmacies")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Create pharmacy",
+            description = "Create a new pharmacy with owner account",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Pharmacy created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Subdomain or email already exists")
+    })
     public ResponseEntity<ApiResponse<PharmacyResponse>> createPharmacy(
             @Valid @RequestBody PharmacyCreateRequest request) {
 
         Long adminId = securityUtils.getCurrentUserId().orElse(null);
         String adminEmail = securityUtils.getCurrentUserEmail().orElse("system");
 
-        // Validate subdomain
         if (!pharmacyService.isSubdomainAvailable(request.getSubdomain())) {
             throw new DuplicateResourceException("Pharmacy", "subdomain", request.getSubdomain());
         }
 
-        // Validate custom domain if provided
         if (request.getCustomDomain() != null && !request.getCustomDomain().isEmpty()) {
             if (!pharmacyService.isCustomDomainAvailable(request.getCustomDomain())) {
                 throw new DuplicateResourceException("Pharmacy", "customDomain", request.getCustomDomain());
             }
         }
 
-        // Validate owner email
         if (userService.emailExists(request.getOwnerEmail())) {
             throw new DuplicateResourceException("User", "email", request.getOwnerEmail());
         }
 
-        // Create pharmacy
         Pharmacy pharmacy = pharmacyMapper.toEntity(request);
         pharmacy = pharmacyService.createPharmacy(pharmacy);
 
-        // Create owner
         RegisterPharmacyOwnerRequest ownerRequest = new RegisterPharmacyOwnerRequest();
         ownerRequest.setPharmacyId(pharmacy.getId());
         ownerRequest.setEmail(request.getOwnerEmail());
@@ -179,7 +190,6 @@ public class PharmacyController {
 
         User owner = authService.registerPharmacyOwner(ownerRequest, adminId, adminEmail);
 
-        // Audit log
         auditLogService.logPharmacyCreated(adminId, adminEmail, pharmacy.getId(), pharmacy.getName(), pharmacy.getSubscriptionPlan().name());
 
         log.info("Pharmacy created: {} with owner: {} by admin: {}",
@@ -189,12 +199,13 @@ public class PharmacyController {
                 .body(ApiResponse.success("Pharmacy created successfully", pharmacyMapper.toResponse(pharmacy)));
     }
 
-    /**
-     * Update pharmacy (admin)
-     * PUT /api/admin/pharmacies/{id}
-     */
     @PutMapping("/admin/pharmacies/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Update pharmacy (Admin)",
+            description = "Update pharmacy details",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<PharmacyResponse>> updatePharmacyAdmin(
             @PathVariable Long id,
             @Valid @RequestBody PharmacyUpdateRequest request) {
@@ -204,7 +215,6 @@ public class PharmacyController {
 
         Pharmacy pharmacy = pharmacyService.getById(id);
 
-        // Validate custom domain change
         if (request.getCustomDomain() != null &&
                 !request.getCustomDomain().equals(pharmacy.getCustomDomain())) {
             if (!pharmacyService.isCustomDomainAvailable(request.getCustomDomain())) {
@@ -215,7 +225,6 @@ public class PharmacyController {
         pharmacyMapper.updateEntity(pharmacy, request);
         pharmacy = pharmacyService.updatePharmacy(pharmacy);
 
-        // Audit log
         auditLogService.logPharmacyUpdated(pharmacy.getId(), adminId, adminEmail, null, "Pharmacy updated by admin");
 
         log.info("Pharmacy updated by admin: {} - {}", pharmacy.getName(), adminEmail);
@@ -223,22 +232,22 @@ public class PharmacyController {
         return ResponseEntity.ok(ApiResponse.success("Pharmacy updated successfully", pharmacyMapper.toResponse(pharmacy)));
     }
 
-    /**
-     * Upgrade pharmacy plan
-     * PATCH /api/admin/pharmacies/{id}/upgrade
-     */
     @PatchMapping("/admin/pharmacies/{id}/upgrade")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Upgrade subscription plan",
+            description = "Upgrade pharmacy to a higher plan",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<PharmacyResponse>> upgradePlan(
             @PathVariable Long id,
-            @RequestParam SubscriptionPlan plan) {
+            @Parameter(description = "New subscription plan") @RequestParam SubscriptionPlan plan) {
 
         Long adminId = securityUtils.getCurrentUserId().orElse(null);
         String adminEmail = securityUtils.getCurrentUserEmail().orElse("system");
 
         Pharmacy pharmacy = pharmacyService.upgradePlan(id, plan);
 
-        // Audit log
         auditLogService.logPharmacyPlanUpgraded(pharmacy.getId(), adminId, adminEmail, null, plan.name());
 
         log.info("Pharmacy plan upgraded: {} to {} by admin: {}", pharmacy.getName(), plan, adminEmail);
@@ -246,19 +255,19 @@ public class PharmacyController {
         return ResponseEntity.ok(ApiResponse.success("Plan upgraded successfully", pharmacyMapper.toResponse(pharmacy)));
     }
 
-    /**
-     * Suspend pharmacy
-     * PATCH /api/admin/pharmacies/{id}/suspend
-     */
     @PatchMapping("/admin/pharmacies/{id}/suspend")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Suspend pharmacy",
+            description = "Suspend a pharmacy (disables access)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<PharmacyResponse>> suspendPharmacy(@PathVariable Long id) {
         Long adminId = securityUtils.getCurrentUserId().orElse(null);
         String adminEmail = securityUtils.getCurrentUserEmail().orElse("system");
 
         Pharmacy pharmacy = pharmacyService.suspendPharmacy(id);
 
-        // Audit log
         auditLogService.logPharmacySuspended(adminId, adminEmail, pharmacy.getId(), pharmacy.getName(), "Suspended by admin");
 
         log.info("Pharmacy suspended: {} by admin: {}", pharmacy.getName(), adminEmail);
@@ -266,19 +275,19 @@ public class PharmacyController {
         return ResponseEntity.ok(ApiResponse.success("Pharmacy suspended", pharmacyMapper.toResponse(pharmacy)));
     }
 
-    /**
-     * Reactivate pharmacy
-     * PATCH /api/admin/pharmacies/{id}/reactivate
-     */
     @PatchMapping("/admin/pharmacies/{id}/reactivate")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Reactivate pharmacy",
+            description = "Reactivate a suspended pharmacy",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<PharmacyResponse>> reactivatePharmacy(@PathVariable Long id) {
         Long adminId = securityUtils.getCurrentUserId().orElse(null);
         String adminEmail = securityUtils.getCurrentUserEmail().orElse("system");
 
         Pharmacy pharmacy = pharmacyService.reactivatePharmacy(id);
 
-        // Audit log
         auditLogService.logPharmacyActivated(adminId, adminEmail, pharmacy.getId(), pharmacy.getName());
 
         log.info("Pharmacy reactivated: {} by admin: {}", pharmacy.getName(), adminEmail);
@@ -286,36 +295,41 @@ public class PharmacyController {
         return ResponseEntity.ok(ApiResponse.success("Pharmacy reactivated", pharmacyMapper.toResponse(pharmacy)));
     }
 
-    /**
-     * Check subdomain availability
-     * GET /api/admin/pharmacies/check-subdomain?subdomain=xxx
-     */
     @GetMapping("/admin/pharmacies/check-subdomain")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Map<String, Boolean>> checkSubdomainAvailability(@RequestParam String subdomain) {
+    @Operation(
+            summary = "Check subdomain availability",
+            description = "Check if a subdomain is available",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    public ResponseEntity<Map<String, Boolean>> checkSubdomainAvailability(
+            @Parameter(description = "Subdomain to check") @RequestParam String subdomain) {
         boolean available = pharmacyService.isSubdomainAvailable(subdomain.toLowerCase());
         return ResponseEntity.ok(Map.of("available", available));
     }
 
-    /**
-     * Check custom domain availability
-     * GET /api/admin/pharmacies/check-domain?domain=xxx
-     */
     @GetMapping("/admin/pharmacies/check-domain")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Map<String, Boolean>> checkDomainAvailability(@RequestParam String domain) {
+    @Operation(
+            summary = "Check domain availability",
+            description = "Check if a custom domain is available",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    public ResponseEntity<Map<String, Boolean>> checkDomainAvailability(
+            @Parameter(description = "Domain to check") @RequestParam String domain) {
         boolean available = pharmacyService.isCustomDomainAvailable(domain);
         return ResponseEntity.ok(Map.of("available", available));
     }
 
     // ==================== PHARMACY OWNER ENDPOINTS ====================
 
-    /**
-     * Get own pharmacy info
-     * GET /api/pharmacy/info
-     */
     @GetMapping("/pharmacy/info")
     @PreAuthorize("hasRole('PHARMACY_OWNER')")
+    @Operation(
+            summary = "Get own pharmacy",
+            description = "Get pharmacy info for the current owner",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<PharmacyResponse> getOwnPharmacy() {
         Long pharmacyId = getCurrentPharmacyId();
         Pharmacy pharmacy = pharmacyService.getById(pharmacyId);
@@ -326,12 +340,13 @@ public class PharmacyController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Update own pharmacy
-     * PUT /api/pharmacy/info
-     */
     @PutMapping("/pharmacy/info")
     @PreAuthorize("hasRole('PHARMACY_OWNER')")
+    @Operation(
+            summary = "Update own pharmacy",
+            description = "Update pharmacy details (owner only)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<PharmacyResponse>> updateOwnPharmacy(
             @Valid @RequestBody PharmacyUpdateRequest request) {
 
@@ -341,7 +356,6 @@ public class PharmacyController {
 
         Pharmacy pharmacy = pharmacyService.getById(pharmacyId);
 
-        // Validate custom domain change
         if (request.getCustomDomain() != null &&
                 !request.getCustomDomain().equals(pharmacy.getCustomDomain())) {
             if (!pharmacyService.isCustomDomainAvailable(request.getCustomDomain())) {
@@ -352,7 +366,6 @@ public class PharmacyController {
         pharmacyMapper.updateEntity(pharmacy, request);
         pharmacy = pharmacyService.updatePharmacy(pharmacy);
 
-        // Audit log
         auditLogService.logPharmacyUpdated(pharmacy.getId(), userId, userEmail, null, "Updated by owner");
 
         log.info("Pharmacy updated by owner: {} - {}", pharmacy.getName(), userEmail);
@@ -360,12 +373,13 @@ public class PharmacyController {
         return ResponseEntity.ok(ApiResponse.success("Pharmacy updated successfully", pharmacyMapper.toResponse(pharmacy)));
     }
 
-    /**
-     * Get pharmacy staff list
-     * GET /api/pharmacy/staff
-     */
     @GetMapping("/pharmacy/staff")
     @PreAuthorize("hasRole('PHARMACY_OWNER')")
+    @Operation(
+            summary = "Get staff list",
+            description = "List all staff members for the pharmacy",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<List<Map<String, Object>>> getPharmacyStaff() {
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -387,12 +401,13 @@ public class PharmacyController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Deactivate staff member
-     * PATCH /api/pharmacy/staff/{staffId}/deactivate
-     */
     @PatchMapping("/pharmacy/staff/{staffId}/deactivate")
     @PreAuthorize("hasRole('PHARMACY_OWNER')")
+    @Operation(
+            summary = "Deactivate staff",
+            description = "Deactivate a staff member",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<String>> deactivateStaff(@PathVariable Long staffId) {
         Long pharmacyId = getCurrentPharmacyId();
         Long userId = securityUtils.getCurrentUserId().orElse(null);
@@ -400,12 +415,10 @@ public class PharmacyController {
 
         User staff = userService.getById(staffId);
 
-        // Validate staff belongs to pharmacy
         if (staff.getPharmacy() == null || !staff.getPharmacy().getId().equals(pharmacyId)) {
             throw AccessDeniedException.resourceAccess("staff");
         }
 
-        // Cannot deactivate owner
         if (staff.getRole() == UserRole.PHARMACY_OWNER) {
             throw new BadRequestException("Cannot deactivate pharmacy owner");
         }
@@ -417,12 +430,13 @@ public class PharmacyController {
         return ResponseEntity.ok(ApiResponse.success("Staff member deactivated"));
     }
 
-    /**
-     * Activate staff member
-     * PATCH /api/pharmacy/staff/{staffId}/activate
-     */
     @PatchMapping("/pharmacy/staff/{staffId}/activate")
     @PreAuthorize("hasRole('PHARMACY_OWNER')")
+    @Operation(
+            summary = "Activate staff",
+            description = "Activate a staff member",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<String>> activateStaff(@PathVariable Long staffId) {
         Long pharmacyId = getCurrentPharmacyId();
         Long userId = securityUtils.getCurrentUserId().orElse(null);
@@ -430,7 +444,6 @@ public class PharmacyController {
 
         User staff = userService.getById(staffId);
 
-        // Validate staff belongs to pharmacy
         if (staff.getPharmacy() == null || !staff.getPharmacy().getId().equals(pharmacyId)) {
             throw AccessDeniedException.resourceAccess("staff");
         }

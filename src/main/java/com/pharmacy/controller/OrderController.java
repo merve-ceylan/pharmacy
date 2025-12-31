@@ -8,11 +8,9 @@ import com.pharmacy.dto.response.OrderResponse;
 import com.pharmacy.dto.response.PageResponse;
 import com.pharmacy.entity.Cart;
 import com.pharmacy.entity.Order;
-import com.pharmacy.entity.User;
 import com.pharmacy.enums.OrderStatus;
 import com.pharmacy.exception.AccessDeniedException;
 import com.pharmacy.exception.BadRequestException;
-import com.pharmacy.exception.ResourceNotFoundException;
 import com.pharmacy.mapper.OrderMapper;
 import com.pharmacy.security.SecurityUtils;
 import com.pharmacy.service.AuditLogService;
@@ -20,6 +18,13 @@ import com.pharmacy.service.CartService;
 import com.pharmacy.service.OrderService;
 import com.pharmacy.service.PharmacyService;
 import com.pharmacy.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +42,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Orders", description = "Order management endpoints")
 public class OrderController {
 
     private static final Logger log = LoggerFactory.getLogger(OrderController.class);
@@ -67,12 +73,17 @@ public class OrderController {
 
     // ==================== CUSTOMER ENDPOINTS ====================
 
-    /**
-     * Create order from cart
-     * POST /api/customer/orders
-     */
     @PostMapping("/customer/orders")
     @PreAuthorize("hasRole('CUSTOMER')")
+    @Operation(
+            summary = "Create order",
+            description = "Create a new order from the shopping cart",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Order created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Cart is empty or validation error")
+    })
     public ResponseEntity<ApiResponse<OrderResponse>> createOrder(
             @Valid @RequestBody OrderCreateRequest request) {
 
@@ -80,14 +91,11 @@ public class OrderController {
                 .orElseThrow(() -> new BadRequestException("User not authenticated"));
         String customerEmail = securityUtils.getCurrentUserEmail().orElse("unknown");
 
-        // Validate pharmacy is active
         pharmacyService.validatePharmacyActive(request.getPharmacyId());
 
-        // Get customer's cart for this pharmacy
         Cart cart = cartService.getCart(customerId, request.getPharmacyId())
                 .orElseThrow(() -> new BadRequestException("Cart is empty"));
 
-        // Create order from cart
         Order order = orderService.createOrderFromCart(
                 cart,
                 request.getDeliveryType(),
@@ -99,7 +107,6 @@ public class OrderController {
                 request.getNotes()
         );
 
-        // Audit log
         auditLogService.logOrderCreated(
                 request.getPharmacyId(), customerId, customerEmail,
                 order.getId(), order.getOrderNumber(), order.getTotalAmount()
@@ -111,15 +118,16 @@ public class OrderController {
                 .body(ApiResponse.success("Order created successfully", orderMapper.toResponseWithItems(order)));
     }
 
-    /**
-     * Get customer's orders
-     * GET /api/customer/orders
-     */
     @GetMapping("/customer/orders")
     @PreAuthorize("hasRole('CUSTOMER')")
+    @Operation(
+            summary = "Get my orders",
+            description = "Get paginated list of orders for the current customer",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<PageResponse<OrderResponse>> getCustomerOrders(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @Parameter(description = "Page number") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size) {
 
         Long customerId = securityUtils.getCurrentUserId()
                 .orElseThrow(() -> new BadRequestException("User not authenticated"));
@@ -131,19 +139,19 @@ public class OrderController {
         return ResponseEntity.ok(PageResponse.of(responsePage));
     }
 
-    /**
-     * Get single order details (customer)
-     * GET /api/customer/orders/{orderNumber}
-     */
     @GetMapping("/customer/orders/{orderNumber}")
     @PreAuthorize("hasRole('CUSTOMER')")
+    @Operation(
+            summary = "Get order details",
+            description = "Get details of a specific order",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<OrderResponse> getCustomerOrder(@PathVariable String orderNumber) {
         Long customerId = securityUtils.getCurrentUserId()
                 .orElseThrow(() -> new BadRequestException("User not authenticated"));
 
         Order order = orderService.getByOrderNumber(orderNumber);
 
-        // Validate order belongs to customer
         if (!order.getCustomer().getId().equals(customerId)) {
             throw AccessDeniedException.resourceAccess("order");
         }
@@ -151,12 +159,17 @@ public class OrderController {
         return ResponseEntity.ok(orderMapper.toResponseWithItems(order));
     }
 
-    /**
-     * Cancel order (customer)
-     * POST /api/customer/orders/{orderNumber}/cancel
-     */
     @PostMapping("/customer/orders/{orderNumber}/cancel")
     @PreAuthorize("hasRole('CUSTOMER')")
+    @Operation(
+            summary = "Cancel order",
+            description = "Cancel an order (only if status allows)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Order cancelled"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Order cannot be cancelled")
+    })
     public ResponseEntity<ApiResponse<OrderResponse>> cancelOrderByCustomer(
             @PathVariable String orderNumber,
             @Valid @RequestBody OrderCancelRequest request) {
@@ -167,14 +180,12 @@ public class OrderController {
 
         Order order = orderService.getByOrderNumber(orderNumber);
 
-        // Validate order belongs to customer
         if (!order.getCustomer().getId().equals(customerId)) {
             throw AccessDeniedException.resourceAccess("order");
         }
 
         order = orderService.cancelOrder(order.getId(), request.getReason(), customerId);
 
-        // Audit log
         auditLogService.logOrderCancelled(
                 order.getPharmacy().getId(), customerId, customerEmail,
                 order.getId(), order.getOrderNumber(), request.getReason()
@@ -185,18 +196,19 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order cancelled successfully", orderMapper.toResponse(order)));
     }
 
-    // ==================== STAFF ENDPOINTS (Pharmacy Owner & Staff) ====================
+    // ==================== STAFF ENDPOINTS ====================
 
-    /**
-     * Get pharmacy orders
-     * GET /api/staff/orders
-     */
     @GetMapping("/staff/orders")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get pharmacy orders",
+            description = "Get paginated list of orders for the pharmacy",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<PageResponse<OrderResponse>> getPharmacyOrders(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) OrderStatus status) {
+            @Parameter(description = "Filter by status") @RequestParam(required = false) OrderStatus status) {
 
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -207,12 +219,13 @@ public class OrderController {
         return ResponseEntity.ok(PageResponse.of(responsePage));
     }
 
-    /**
-     * Get orders by status
-     * GET /api/staff/orders/status/{status}
-     */
     @GetMapping("/staff/orders/status/{status}")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get orders by status",
+            description = "List orders filtered by status",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<List<OrderResponse>> getOrdersByStatus(@PathVariable OrderStatus status) {
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -224,12 +237,13 @@ public class OrderController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get pending orders (for quick access)
-     * GET /api/staff/orders/pending
-     */
     @GetMapping("/staff/orders/pending")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get pending orders",
+            description = "List all pending orders (quick access)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<List<OrderResponse>> getPendingOrders() {
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -241,12 +255,13 @@ public class OrderController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get recent orders
-     * GET /api/staff/orders/recent
-     */
     @GetMapping("/staff/orders/recent")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get recent orders",
+            description = "List 10 most recent orders",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<List<OrderResponse>> getRecentOrders() {
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -258,12 +273,13 @@ public class OrderController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * Get single order details (staff)
-     * GET /api/staff/orders/{orderNumber}
-     */
     @GetMapping("/staff/orders/{orderNumber}")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get order details (Staff)",
+            description = "Get full order details including items",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<OrderResponse> getOrder(@PathVariable String orderNumber) {
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -273,12 +289,17 @@ public class OrderController {
         return ResponseEntity.ok(orderMapper.toResponseWithItems(order));
     }
 
-    /**
-     * Update order status
-     * PATCH /api/staff/orders/{orderNumber}/status
-     */
     @PatchMapping("/staff/orders/{orderNumber}/status")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Update order status",
+            description = "Update order status (follows allowed transitions)",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid status transition")
+    })
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(
             @PathVariable String orderNumber,
             @Valid @RequestBody OrderStatusUpdateRequest request) {
@@ -292,10 +313,8 @@ public class OrderController {
 
         OrderStatus oldStatus = order.getStatus();
 
-        // Update status
         order = orderService.updateStatus(order.getId(), request.getStatus());
 
-        // Set tracking info if provided
         if (request.getTrackingNumber() != null && request.getStatus() == OrderStatus.SHIPPED) {
             order = orderService.setTrackingNumber(order.getId(), request.getTrackingNumber(), request.getCargoCompany());
 
@@ -305,7 +324,6 @@ public class OrderController {
                     request.getTrackingNumber(), request.getCargoCompany()
             );
         } else {
-            // Log status change
             auditLogService.logOrderStatusChanged(
                     pharmacyId, userId, userEmail,
                     order.getId(), order.getOrderNumber(),
@@ -319,12 +337,13 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order status updated", orderMapper.toResponse(order)));
     }
 
-    /**
-     * Cancel order (staff)
-     * POST /api/staff/orders/{orderNumber}/cancel
-     */
     @PostMapping("/staff/orders/{orderNumber}/cancel")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Cancel order (Staff)",
+            description = "Cancel an order with reason",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<OrderResponse>> cancelOrderByStaff(
             @PathVariable String orderNumber,
             @Valid @RequestBody OrderCancelRequest request) {
@@ -338,7 +357,6 @@ public class OrderController {
 
         order = orderService.cancelOrder(order.getId(), request.getReason(), userId);
 
-        // Audit log
         auditLogService.logOrderCancelled(
                 pharmacyId, userId, userEmail,
                 order.getId(), order.getOrderNumber(), request.getReason()
@@ -349,16 +367,17 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order cancelled successfully", orderMapper.toResponse(order)));
     }
 
-    /**
-     * Update tracking number
-     * PATCH /api/staff/orders/{orderNumber}/tracking
-     */
     @PatchMapping("/staff/orders/{orderNumber}/tracking")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Update tracking number",
+            description = "Add or update cargo tracking information",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<ApiResponse<OrderResponse>> updateTrackingNumber(
             @PathVariable String orderNumber,
-            @RequestParam String trackingNumber,
-            @RequestParam String cargoCompany) {
+            @Parameter(description = "Tracking number") @RequestParam String trackingNumber,
+            @Parameter(description = "Cargo company name") @RequestParam String cargoCompany) {
 
         Long pharmacyId = getCurrentPharmacyId();
         Long userId = securityUtils.getCurrentUserId().orElse(null);
@@ -369,7 +388,6 @@ public class OrderController {
 
         order = orderService.setTrackingNumber(order.getId(), trackingNumber, cargoCompany);
 
-        // Audit log
         auditLogService.logOrderTrackingUpdated(
                 pharmacyId, userId, userEmail,
                 order.getId(), order.getOrderNumber(),
@@ -379,12 +397,13 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Tracking number updated", orderMapper.toResponse(order)));
     }
 
-    /**
-     * Get order statistics
-     * GET /api/staff/orders/stats
-     */
     @GetMapping("/staff/orders/stats")
     @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get order statistics",
+            description = "Get order count by status",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public ResponseEntity<Map<String, Object>> getOrderStats() {
         Long pharmacyId = getCurrentPharmacyId();
 
