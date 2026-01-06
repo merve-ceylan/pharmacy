@@ -88,7 +88,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/staff/**").hasAnyRole("PHARMACY_OWNER", "STAFF")
 
                         // Customer endpoints
-                        .requestMatchers("/api/customer/**").hasRole("CUSTOMER")
+                        .requestMatchers("/api/customer/**").hasAnyRole("CUSTOMER", "PHARMACY_OWNER", "STAFF", "SUPER_ADMIN")
 
                         // All other requests require authentication
                         .anyRequest().authenticated()
