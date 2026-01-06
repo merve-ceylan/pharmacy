@@ -1,4 +1,4 @@
-# 💊 Pharmacy E-Commerce Platform
+# 💊 Pharmacy E-Commerce Platform - Backend API
 
 Multi-tenant SaaS e-commerce platform for pharmacies in Turkey.
 
@@ -14,28 +14,31 @@ Multi-tenant SaaS e-commerce platform for pharmacies in Turkey.
 - **Product Management**: Categories, stock tracking, discounts
 - **Shopping Cart**: Real-time stock validation
 - **Order Management**: Full lifecycle with status tracking
+- **Favorites System**: Save products for later
+- **Address Management**: Multiple delivery addresses per user
+- **Profile Management**: Update user info and password
 - **JWT Authentication**: Secure token-based auth with refresh tokens
 - **Audit Logging**: Complete action history
 
 ## 🏗️ Architecture
-
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      CLIENTS                                 │
-│  (demo.eczanem.com)  (ozan.eczanem.com)  (admin.eczanem.com)│
+│                   NEXT.JS FRONTEND                          │
+│              http://localhost:3000                          │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    SPRING BOOT API                           │
+│                    SPRING BOOT API                          │
+│              http://localhost:8080                          │
 ├─────────────────────────────────────────────────────────────┤
-│  Controllers │ Services │ Repositories │ Security           │
+│  Controllers │ Services │ Repositories │ Security          │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     POSTGRESQL                               │
-│  pharmacies│users│products│orders│carts│payments│audit_logs │
+│                     POSTGRESQL / H2                         │
+│  pharmacies│users│products│orders│carts│favorites│addresses │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -44,24 +47,24 @@ Multi-tenant SaaS e-commerce platform for pharmacies in Turkey.
 ### Prerequisites
 - Java 21
 - Maven 3.8+
-- Docker & Docker Compose
-- PostgreSQL 16 (or use Docker)
+- Docker & Docker Compose (optional)
+- PostgreSQL 16 (or use H2 for development)
 
 ### 1. Clone & Setup
 ```bash
-git clone https://github.com/yourusername/pharmacy-platform.git
-cd pharmacy-platform
+git clone https://github.com/merve-ceylan/pharmacy.git
+cd pharmacy
 ```
 
-### 2. Start Database
-```bash
-docker-compose up -d
-```
-
-### 3. Run Application
+### 2. Run Application
 ```bash
 ./mvnw spring-boot:run
 ```
+
+The API will be available at `http://localhost:8080`
+
+### 3. API Documentation
+Open Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 ### 4. Test Accounts
 | Role | Email | Password |
@@ -81,24 +84,30 @@ docker-compose up -d
 | POST | `/api/auth/logout` | Logout | Authenticated |
 | POST | `/api/auth/refresh` | Refresh token | Public |
 | GET | `/api/auth/me` | Current user info | Authenticated |
+| POST | `/api/auth/change-password` | Change password | Authenticated |
 
 ### Products
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/api/public/pharmacies/{id}/products` | List products | Public |
 | GET | `/api/public/pharmacies/{id}/products/featured` | Featured products | Public |
+| GET | `/api/public/pharmacies/{id}/products/slug/{slug}` | Product by slug | Public |
 | GET | `/api/public/pharmacies/{id}/products/search?q=` | Search products | Public |
 | GET | `/api/staff/products` | All products (admin) | Staff |
 | POST | `/api/staff/products` | Create product | Staff |
 | PUT | `/api/staff/products/{id}` | Update product | Staff |
-| PATCH | `/api/staff/products/{id}/stock` | Update stock | Staff |
+| PATCH | `/api/staff/products/{id}/activate` | Activate product | Staff |
+| PATCH | `/api/staff/products/{id}/deactivate` | Deactivate product | Staff |
 
 ### Categories
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/api/public/categories` | List categories | Public |
+| GET | `/api/admin/categories` | All categories (admin) | Super Admin |
 | POST | `/api/admin/categories` | Create category | Super Admin |
 | PUT | `/api/admin/categories/{id}` | Update category | Super Admin |
+| PATCH | `/api/admin/categories/{id}/activate` | Activate | Super Admin |
+| PATCH | `/api/admin/categories/{id}/deactivate` | Deactivate | Super Admin |
 
 ### Cart
 | Method | Endpoint | Description | Access |
@@ -107,6 +116,7 @@ docker-compose up -d
 | POST | `/api/customer/cart/{pharmacyId}/items` | Add item | Customer |
 | PUT | `/api/customer/cart/{pharmacyId}/items/{id}` | Update quantity | Customer |
 | DELETE | `/api/customer/cart/{pharmacyId}/items/{id}` | Remove item | Customer |
+| DELETE | `/api/customer/cart/{pharmacyId}` | Clear cart | Customer |
 
 ### Orders
 | Method | Endpoint | Description | Access |
@@ -115,7 +125,33 @@ docker-compose up -d
 | GET | `/api/customer/orders` | My orders | Customer |
 | GET | `/api/customer/orders/{orderNumber}` | Order details | Customer |
 | GET | `/api/staff/orders` | Pharmacy orders | Staff |
+| GET | `/api/staff/orders/recent` | Recent orders | Staff |
+| GET | `/api/staff/orders/stats` | Order statistics | Staff |
 | PATCH | `/api/staff/orders/{orderNumber}/status` | Update status | Staff |
+
+### Favorites ⭐ NEW
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/customer/favorites` | List favorites | Customer |
+| POST | `/api/customer/favorites` | Add to favorites | Customer |
+| DELETE | `/api/customer/favorites/{id}` | Remove from favorites | Customer |
+| GET | `/api/customer/favorites/check/{productId}` | Check if favorited | Customer |
+
+### Addresses ⭐ NEW
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/customer/addresses` | List addresses | Customer |
+| GET | `/api/customer/addresses/{id}` | Get address | Customer |
+| POST | `/api/customer/addresses` | Create address | Customer |
+| PUT | `/api/customer/addresses/{id}` | Update address | Customer |
+| DELETE | `/api/customer/addresses/{id}` | Delete address | Customer |
+| PATCH | `/api/customer/addresses/{id}/default` | Set as default | Customer |
+
+### Profile ⭐ NEW
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/customer/profile` | Get profile | Customer |
+| PUT | `/api/customer/profile` | Update profile | Customer |
 
 ### Pharmacy Management
 | Method | Endpoint | Description | Access |
@@ -126,10 +162,10 @@ docker-compose up -d
 | PUT | `/api/pharmacy/info` | Update pharmacy | Owner |
 
 ## 📁 Project Structure
-
 ```
 src/main/java/com/pharmacy/
 ├── config/
+│   ├── SecurityConfig.java
 │   └── DataSeeder.java
 ├── controller/
 │   ├── AuthController.java
@@ -137,24 +173,12 @@ src/main/java/com/pharmacy/
 │   ├── CategoryController.java
 │   ├── OrderController.java
 │   ├── CartController.java
+│   ├── FavoriteController.java    ⭐ NEW
+│   ├── AddressController.java     ⭐ NEW
+│   ├── ProfileController.java     ⭐ NEW
 │   ├── PharmacyController.java
 │   └── PaymentController.java
-├── dto/
-│   ├── request/
-│   │   ├── LoginRequest.java
-│   │   ├── RegisterRequest.java
-│   │   ├── ProductCreateRequest.java
-│   │   ├── OrderCreateRequest.java
-│   │   └── ...
-│   └── response/
-│       ├── AuthResponse.java
-│       ├── ProductResponse.java
-│       ├── OrderResponse.java
-│       ├── ApiResponse.java
-│       ├── PageResponse.java
-│       └── ...
 ├── entity/
-│   ├── BaseEntity.java
 │   ├── User.java
 │   ├── Pharmacy.java
 │   ├── Product.java
@@ -163,39 +187,28 @@ src/main/java/com/pharmacy/
 │   ├── OrderItem.java
 │   ├── Cart.java
 │   ├── CartItem.java
+│   ├── Favorite.java              ⭐ NEW
+│   ├── Address.java               ⭐ NEW
 │   ├── Payment.java
 │   └── AuditLog.java
-├── enums/
-│   ├── UserRole.java
-│   ├── OrderStatus.java
-│   ├── PaymentStatus.java
-│   └── ...
-├── exception/
-│   ├── GlobalExceptionHandler.java
-│   ├── ResourceNotFoundException.java
-│   ├── BusinessException.java
-│   └── ...
-├── mapper/
-│   ├── ProductMapper.java
-│   ├── OrderMapper.java
-│   ├── CartMapper.java
-│   └── ...
 ├── repository/
 │   ├── UserRepository.java
 │   ├── ProductRepository.java
-│   ├── OrderRepository.java
+│   ├── FavoriteRepository.java    ⭐ NEW
+│   ├── AddressRepository.java     ⭐ NEW
+│   └── ...
+├── service/
+│   ├── AuthService.java
+│   ├── ProductService.java
+│   ├── FavoriteService.java       ⭐ NEW
+│   ├── AddressService.java        ⭐ NEW
 │   └── ...
 ├── security/
 │   ├── SecurityConfig.java
 │   ├── JwtService.java
-│   ├── JwtAuthenticationFilter.java
-│   └── ...
-└── service/
-    ├── AuthService.java
-    ├── ProductService.java
-    ├── OrderService.java
-    ├── CartService.java
-    └── ...
+│   └── JwtAuthenticationFilter.java
+└── exception/
+    └── GlobalExceptionHandler.java
 ```
 
 ## 🔒 Security Features
@@ -206,6 +219,7 @@ src/main/java/com/pharmacy/
 - Rate limiting (100 req/min general, 5 req/min login)
 - Token blacklisting on logout
 - Role-based access control
+- CORS configuration for frontend
 
 ## 🧪 API Testing
 
@@ -213,33 +227,35 @@ src/main/java/com/pharmacy/
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"owner@demo.com","password":"Owner123!@#"}'
+  -d '{"email":"test@test.com","password":"Pharmacy2024!@#"}'
 ```
 
-### Get Products
+### Add to Favorites
 ```bash
-curl http://localhost:8080/api/staff/products \
-  -H "Authorization: Bearer <token>"
+curl -X POST http://localhost:8080/api/customer/favorites \
+  -H "Authorization: Bearer " \
+  -H "Content-Type: application/json" \
+  -d '{"productId": 1}'
 ```
 
-### Create Order
+### Create Address
 ```bash
-curl -X POST http://localhost:8080/api/customer/orders \
-  -H "Authorization: Bearer <token>" \
+curl -X POST http://localhost:8080/api/customer/addresses \
+  -H "Authorization: Bearer " \
   -H "Content-Type: application/json" \
   -d '{
-    "pharmacyId": 1,
-    "deliveryType": "CARGO",
-    "shippingAddress": "Test Address",
-    "shippingCity": "İstanbul",
-    "shippingDistrict": "Kadıköy",
-    "shippingPostalCode": "34700",
-    "shippingPhone": "05551234567"
+    "title": "Ev",
+    "fullName": "Test User",
+    "phone": "5551234567",
+    "city": "İstanbul",
+    "district": "Kadıköy",
+    "postalCode": "34710",
+    "addressLine": "Test Mahallesi Test Sokak No:1",
+    "isDefault": true
   }'
 ```
 
 ## 📋 Order Status Flow
-
 ```
 PENDING → CONFIRMED → PREPARING → SHIPPED → DELIVERED
     ↓         ↓
@@ -254,13 +270,19 @@ PENDING → CONFIRMED → PREPARING → SHIPPED → DELIVERED
 - [x] Security & JWT authentication
 - [x] Exception handling
 - [x] Controller & DTO layer
-- [x] API testing
+- [x] Favorites system
+- [x] Address management
+- [x] Profile management
+- [x] Password change
 - [ ] Multi-tenant domain resolver
 - [ ] iyzico payment integration
 - [ ] Email notifications
-- [ ] Frontend (React/Next.js)
-- [ ] Admin dashboard
+- [ ] Product image upload
 - [ ] Excel product import
+
+## 🔗 Related Repositories
+
+- **Frontend**: [pharmacy-frontend](https://github.com/merve-ceylan/pharmacy-frontend) - Next.js 14 Frontend
 
 ## 📄 License
 
@@ -268,4 +290,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 👨‍💻 Author
 
-Built with ❤️ for Turkish pharmacies*
+Built with ❤️ for Turkish pharmacies
