@@ -91,7 +91,10 @@ public class CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("CartItem", cartItemId));
 
         if (quantity <= 0) {
-            cartItemRepository.delete(item);
+            // Miktar 0 veya negatifse sil
+            Cart cart = item.getCart();
+            cart.removeItem(item);
+            cartRepository.save(cart);
             return null;
         }
 
@@ -104,18 +107,27 @@ public class CartService {
     }
 
     public void removeFromCart(Long cartItemId) {
-        if (!cartItemRepository.existsById(cartItemId)) {
-            throw new ResourceNotFoundException("CartItem", cartItemId);
-        }
-        cartItemRepository.deleteById(cartItemId);
+        CartItem item = cartItemRepository.findById(cartItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("CartItem", cartItemId));
+
+        // delete item from cart
+        Cart cart = item.getCart();
+        cart.removeItem(item);
+        cartRepository.save(cart);
     }
 
     public void removeProductFromCart(Long cartId, Long productId) {
-        cartItemRepository.deleteByCartIdAndProductId(cartId, productId);
+        Cart cart = getById(cartId);
+        CartItem item = cartItemRepository.findByCartIdAndProductId(cartId, productId)
+                .orElseThrow(() -> new ResourceNotFoundException("CartItem", "productId", productId.toString()));
+        cart.removeItem(item);
+        cartRepository.save(cart);
     }
 
     public void clearCart(Long cartId) {
-        cartItemRepository.deleteByCartId(cartId);
+        Cart cart = getById(cartId);
+        cart.clear();
+        cartRepository.save(cart);
     }
 
     public BigDecimal getCartSubtotal(Long cartId) {
