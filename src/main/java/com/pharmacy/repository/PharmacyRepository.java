@@ -2,6 +2,7 @@ package com.pharmacy.repository;
 
 import com.pharmacy.entity.Pharmacy;
 import com.pharmacy.enums.PharmacyStatus;
+import com.pharmacy.enums.SubscriptionPlan;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -31,4 +32,6 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, Long> {
 
     // Find by email
     Optional<Pharmacy> findByEmail(String email);
+    long countByStatus(PharmacyStatus status);
+    long countBySubscriptionPlan(SubscriptionPlan plan);
 }

@@ -57,4 +57,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     // Check if order number exists
     boolean existsByOrderNumber(String orderNumber);
+
+    List<Order> findByPharmacyIdAndCreatedAtBetween(Long pharmacyId, LocalDateTime start, LocalDateTime end);
 }

@@ -60,4 +60,5 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     // Count active products by pharmacy
     long countByPharmacyIdAndActiveTrue(Long pharmacyId);
+
 }
