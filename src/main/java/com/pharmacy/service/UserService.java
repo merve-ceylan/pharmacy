@@ -178,4 +178,12 @@ public class UserService {
     public boolean emailExists(String email) {
         return userRepository.existsByEmail(email);
     }
+
+    public List<User> findAll() {
+        return userRepository.findAll();
+    }
+
+    public List<User> findByRole(UserRole role) {
+        return userRepository.findByRole(role);
+    }
 }
