@@ -180,10 +180,10 @@ public class UserService {
     }
 
     public List<User> findAll() {
-        return userRepository.findAll();
+        return userRepository.findAllWithPharmacy();
     }
 
     public List<User> findByRole(UserRole role) {
-        return userRepository.findByRole(role);
+        return userRepository.findByRoleWithPharmacy(role);
     }
 }

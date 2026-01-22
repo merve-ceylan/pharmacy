@@ -3,6 +3,8 @@ package com.pharmacy.repository;
 import com.pharmacy.entity.User;
 import com.pharmacy.enums.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -37,4 +39,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Find by phone
     Optional<User> findByPhone(String phone);
+
+    // Fetch users with pharmacy data (avoid lazy loading)
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.pharmacy")
+    List<User> findAllWithPharmacy();
+
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.pharmacy WHERE u.role = :role")
+    List<User> findByRoleWithPharmacy(@Param("role") UserRole role);
 }
