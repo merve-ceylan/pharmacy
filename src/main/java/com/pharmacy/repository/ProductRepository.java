@@ -58,7 +58,30 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     // Count products by pharmacy
     long countByPharmacyId(Long pharmacyId);
 
-    // Count active products by pharmacy
-    long countByPharmacyIdAndActiveTrue(Long pharmacyId);
+
+    /**
+     * Count active products for a pharmacy
+     * @param pharmacyId the pharmacy ID
+     * @return count of active products
+     */
+    Long countByPharmacyIdAndActiveTrue(Long pharmacyId);
+
+    /**
+     * Find products by pharmacy and active status with pagination
+     * @param pharmacyId the pharmacy ID
+     * @param active active status
+     * @param pageable pagination info
+     * @return page of products
+     */
+    Page<Product> findByPharmacyIdAndActive(Long pharmacyId, boolean active, Pageable pageable);
+
+    /**
+     * Find low stock products with pagination
+     * @param pharmacyId the pharmacy ID
+     * @param threshold stock threshold
+     * @param pageable pagination info
+     * @return page of low stock products
+     */
+    Page<Product> findByPharmacyIdAndStockQuantityLessThan(Long pharmacyId, int threshold, Pageable pageable);
 
 }

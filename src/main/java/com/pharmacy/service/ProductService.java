@@ -149,7 +149,7 @@ public class ProductService {
     }
 
     public long countByPharmacy(Long pharmacyId) {
-        return productRepository.countByPharmacyIdAndActiveTrue(pharmacyId);
+        return productRepository.countByPharmacyId(pharmacyId);
     }
 
     private String generateSlug(String name, Long pharmacyId) {
@@ -179,5 +179,17 @@ public class ProductService {
         }
 
         return finalSlug;
+    }
+
+    public Long countActiveByPharmacy(Long pharmacyId) {
+        return productRepository.countByPharmacyIdAndActiveTrue(pharmacyId);
+    }
+
+    public Page<Product> findByPharmacyAndActive(Long pharmacyId, boolean active, Pageable pageable) {
+        return productRepository.findByPharmacyIdAndActive(pharmacyId, active, pageable);
+    }
+
+    public Page<Product> findLowStockProductsPaginated(Long pharmacyId, Pageable pageable) {
+        return productRepository.findByPharmacyIdAndStockQuantityLessThan(pharmacyId, 10, pageable);
     }
 }

@@ -37,6 +37,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -411,15 +412,20 @@ public class OrderController {
         long confirmed = orderService.countByStatus(pharmacyId, OrderStatus.CONFIRMED);
         long preparing = orderService.countByStatus(pharmacyId, OrderStatus.PREPARING);
         long shipped = orderService.countByStatus(pharmacyId, OrderStatus.SHIPPED);
+        long delivered = orderService.countByStatus(pharmacyId, OrderStatus.DELIVERED);
+        long cancelled = orderService.countByStatus(pharmacyId, OrderStatus.CANCELLED);
         long todayOrders = orderService.countTodayOrders(pharmacyId);
 
-        return ResponseEntity.ok(Map.of(
-                "pending", pending,
-                "confirmed", confirmed,
-                "preparing", preparing,
-                "shipped", shipped,
-                "todayOrders", todayOrders
-        ));
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("pending", pending);
+        stats.put("confirmed", confirmed);
+        stats.put("preparing", preparing);
+        stats.put("shipped", shipped);
+        stats.put("delivered", delivered);
+        stats.put("cancelled", cancelled);
+        stats.put("todayOrders", todayOrders);
+
+        return ResponseEntity.ok(stats);
     }
 
     // ==================== HELPER METHODS ====================

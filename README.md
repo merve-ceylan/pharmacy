@@ -14,6 +14,7 @@ Multi-tenant SaaS e-commerce platform for pharmacies in Turkey.
 - **Product Management**: Categories, stock tracking, discounts
 - **Shopping Cart**: Real-time stock validation
 - **Order Management**: Full lifecycle with status tracking
+- **Staff Management**: Owner can manage pharmacy staff ⭐ NEW
 - **Favorites System**: Save products for later
 - **Address Management**: Multiple delivery addresses per user
 - **Profile Management**: Update user info and password
@@ -129,7 +130,16 @@ Open Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | GET | `/api/staff/orders/stats` | Order statistics | Staff |
 | PATCH | `/api/staff/orders/{orderNumber}/status` | Update status | Staff |
 
-### Favorites ⭐ NEW
+### Staff Management ⭐ NEW
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/pharmacy/staff` | List pharmacy staff | Owner |
+| GET | `/api/pharmacy/staff/stats` | Staff statistics | Owner |
+| POST | `/api/pharmacy/staff` | Add new staff member | Owner |
+| PATCH | `/api/pharmacy/staff/{id}/activate` | Activate staff | Owner |
+| PATCH | `/api/pharmacy/staff/{id}/deactivate` | Deactivate staff | Owner |
+
+### Favorites
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/api/customer/favorites` | List favorites | Customer |
@@ -137,7 +147,7 @@ Open Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | DELETE | `/api/customer/favorites/{id}` | Remove from favorites | Customer |
 | GET | `/api/customer/favorites/check/{productId}` | Check if favorited | Customer |
 
-### Addresses ⭐ NEW
+### Addresses
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/api/customer/addresses` | List addresses | Customer |
@@ -147,7 +157,7 @@ Open Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | DELETE | `/api/customer/addresses/{id}` | Delete address | Customer |
 | PATCH | `/api/customer/addresses/{id}/default` | Set as default | Customer |
 
-### Profile ⭐ NEW
+### Profile
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/api/customer/profile` | Get profile | Customer |
@@ -173,10 +183,11 @@ src/main/java/com/pharmacy/
 │   ├── CategoryController.java
 │   ├── OrderController.java
 │   ├── CartController.java
-│   ├── FavoriteController.java    ⭐ NEW
-│   ├── AddressController.java     ⭐ NEW
-│   ├── ProfileController.java     ⭐ NEW
+│   ├── FavoriteController.java
+│   ├── AddressController.java
+│   ├── ProfileController.java
 │   ├── PharmacyController.java
+│   ├── PharmacyStaffController.java    ⭐ NEW
 │   └── PaymentController.java
 ├── entity/
 │   ├── User.java
@@ -187,21 +198,21 @@ src/main/java/com/pharmacy/
 │   ├── OrderItem.java
 │   ├── Cart.java
 │   ├── CartItem.java
-│   ├── Favorite.java              ⭐ NEW
-│   ├── Address.java               ⭐ NEW
+│   ├── Favorite.java
+│   ├── Address.java
 │   ├── Payment.java
 │   └── AuditLog.java
 ├── repository/
 │   ├── UserRepository.java
 │   ├── ProductRepository.java
-│   ├── FavoriteRepository.java    ⭐ NEW
-│   ├── AddressRepository.java     ⭐ NEW
+│   ├── FavoriteRepository.java
+│   ├── AddressRepository.java
 │   └── ...
 ├── service/
 │   ├── AuthService.java
 │   ├── ProductService.java
-│   ├── FavoriteService.java       ⭐ NEW
-│   ├── AddressService.java        ⭐ NEW
+│   ├── FavoriteService.java
+│   ├── AddressService.java
 │   └── ...
 ├── security/
 │   ├── SecurityConfig.java
@@ -230,10 +241,24 @@ curl -X POST http://localhost:8080/api/auth/login \
   -d '{"email":"test@test.com","password":"Pharmacy2024!@#"}'
 ```
 
+### Add Staff Member
+```bash
+curl -X POST http://localhost:8080/api/pharmacy/staff \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "newstaff@demo.com",
+    "password": "SecurePass123!@#",
+    "firstName": "Ahmet",
+    "lastName": "Yılmaz",
+    "phone": "05559876543"
+  }'
+```
+
 ### Add to Favorites
 ```bash
 curl -X POST http://localhost:8080/api/customer/favorites \
-  -H "Authorization: Bearer " \
+  -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"productId": 1}'
 ```
@@ -241,7 +266,7 @@ curl -X POST http://localhost:8080/api/customer/favorites \
 ### Create Address
 ```bash
 curl -X POST http://localhost:8080/api/customer/addresses \
-  -H "Authorization: Bearer " \
+  -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Ev",
@@ -274,6 +299,7 @@ PENDING → CONFIRMED → PREPARING → SHIPPED → DELIVERED
 - [x] Address management
 - [x] Profile management
 - [x] Password change
+- [x] Staff management ⭐ NEW
 - [ ] Multi-tenant domain resolver
 - [ ] iyzico payment integration
 - [ ] Email notifications

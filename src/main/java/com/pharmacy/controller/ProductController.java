@@ -37,7 +37,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -195,7 +197,9 @@ public class ProductController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortDir) {
+            @RequestParam(defaultValue = "desc") String sortDir,
+            @Parameter(description = "Filter: ALL, ACTIVE, PASSIVE, LOW_STOCK")
+            @RequestParam(required = false) String filter) {
 
         Long pharmacyId = getCurrentPharmacyId();
 
@@ -204,7 +208,26 @@ public class ProductController {
                 : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Product> products = productService.findByPharmacy(pharmacyId, pageable);
+        Page<Product> products;
+
+        if (filter != null) {
+            switch (filter) {
+                case "ACTIVE":
+                    products = productService.findByPharmacyAndActive(pharmacyId, true, pageable);
+                    break;
+                case "PASSIVE":
+                    products = productService.findByPharmacyAndActive(pharmacyId, false, pageable);
+                    break;
+                case "LOW_STOCK":
+                    products = productService.findLowStockProductsPaginated(pharmacyId, pageable);
+                    break;
+                default:
+                    products = productService.findByPharmacy(pharmacyId, pageable);
+            }
+        } else {
+            products = productService.findByPharmacy(pharmacyId, pageable);
+        }
+
         Page<ProductResponse> responsePage = products.map(productMapper::toResponse);
 
         return ResponseEntity.ok(PageResponse.of(responsePage));
@@ -452,5 +475,37 @@ public class ProductController {
         if (!product.getPharmacy().getId().equals(pharmacyId)) {
             throw AccessDeniedException.resourceAccess("product");
         }
+    }
+
+    @GetMapping("/staff/products/stats")
+    @PreAuthorize("hasAnyRole('PHARMACY_OWNER', 'STAFF')")
+    @Operation(
+            summary = "Get product statistics",
+            description = "Get product statistics for the pharmacy",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    public ResponseEntity<Map<String, Object>> getProductStats() {
+        Long pharmacyId = getCurrentPharmacyId();
+
+        Map<String, Object> stats = new HashMap<>();
+
+        // Total products
+        long total = productService.countByPharmacy(pharmacyId);
+
+        // Active products
+        long active = productService.countActiveByPharmacy(pharmacyId);
+
+        // Inactive products
+        long inactive = total - active;
+
+        stats.put("total", total);
+        stats.put("active", active);
+        stats.put("inactive", inactive);
+
+        // Low stock products
+        List<Product> lowStockProducts = productService.findLowStockProducts(pharmacyId);
+        stats.put("lowStock", lowStockProducts.size());
+
+        return ResponseEntity.ok(stats);
     }
 }

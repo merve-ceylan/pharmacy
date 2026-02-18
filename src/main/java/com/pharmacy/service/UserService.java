@@ -186,4 +186,8 @@ public class UserService {
     public List<User> findByRole(UserRole role) {
         return userRepository.findByRoleWithPharmacy(role);
     }
+
+    public List<User> findByPharmacyAndRole(Long pharmacyId, UserRole role) {
+        return userRepository.findByPharmacyIdAndRole(pharmacyId, role);
+    }
 }
