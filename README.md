@@ -317,3 +317,23 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## 👨‍💻 Author
 
 Built with ❤️ for Turkish pharmacies
+
+## 📝 Project Status
+
+**Public Version (Current):** ✅ Core features complete - Portfolio demonstration
+
+**Private Development:** Additional enterprise features including:
+- Payment integration (iyzico)
+- Email notification system
+- Advanced reporting & analytics
+- Image upload & management
+- Multi-tenant domain routing
+- Production optimizations
+
+This public repository demonstrates technical capabilities and architecture.
+Production version with business-specific features is privately maintained.
+
+---
+
+**Last Updated:** February 2026  
+**Status:** Portfolio Version - Complete
