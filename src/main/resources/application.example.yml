@@ -3,9 +3,9 @@ spring:
     name: pharmacy-platform
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/pharmacy_db
-    username: pharmacy
-    password: pharmacy123
+    url:
+    username: your_username
+    password: your_password
     driver-class-name: org.postgresql.Driver
   
   jpa:
@@ -22,10 +22,10 @@ spring:
     default-property-inclusion: non_null
 
   mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${MAIL_USERNAME:your-email@gmail.com}
-    password: ${MAIL_PASSWORD:your-app-password}
+    host:
+    port:
+    username: your-email@gmail.com
+    password:
     properties:
       mail:
         smtp:
@@ -39,9 +39,9 @@ server:
 # JWT Configuration
 jwt:
   # SECURITY: No fallback secret - environment variable required
-  secret: ${JWT_SECRET:}
-  expiration: ${JWT_EXPIRATION:86400000}  # 24 hours in milliseconds
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 days in milliseconds
+  secret: your_jwt_secret_key_here_generate_with_openssl
+  expiration:  # 24 hours in milliseconds
+  refresh-expiration:  # 7 days in milliseconds
 
   # Rate Limiting
   rate-limit:
@@ -49,7 +49,7 @@ jwt:
     login-attempts-per-minute: 5
   # Server Configuration
   server:
-    port: 8080
+    port:
     error:
       include-message: always
       include-binding-errors: always
@@ -60,7 +60,7 @@ file:
 
 # Platform Configuration
 platform:
-  domain: pharmacyplatform.com
+  domain:
   grace-period-days: 7
   data-retention-days: 30
 
@@ -88,5 +88,5 @@ springdoc:
     filter: true
     display-request-duration: true
   show-actuator: false
-  default-consumes-media-type: application/json
-  default-produces-media-type: application/json
+  default-consumes-media-type:
+  default-produces-media-type:

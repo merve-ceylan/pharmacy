@@ -38,3 +38,5 @@ build/
 .env.*.local
 # Docker Compose (contains sensitive data)
 docker-compose.yml
+# Application config (contains sensitive data)
+src/main/resources/application.yml
