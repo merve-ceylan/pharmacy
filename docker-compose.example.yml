@@ -3,12 +3,12 @@ version: '3.8'
 services:
   postgres:
     image: postgres:16
-    container_name: pharmacy-db
+    container_name:
     restart: unless-stopped
     environment:
-      POSTGRES_DB: pharmacy_db
-      POSTGRES_USER: pharmacy
-      POSTGRES_PASSWORD: pharmacy123
+      POSTGRES_DB:
+      POSTGRES_USER:
+      POSTGRES_PASSWORD: your_secure_password_here
     ports:
       - "5432:5432"
     volumes:

@@ -36,3 +36,5 @@ build/
 .env.local
 .env.production
 .env.*.local
+# Docker Compose (contains sensitive data)
+docker-compose.yml
